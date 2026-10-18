@@ -62,26 +62,21 @@ export function encryptSecret(plainText: string): string {
  */
 export function decryptSecret(encryptedPayload: string): string {
   if (!encryptedPayload) return '';
-  try {
-    const parts = encryptedPayload.split(':');
-    if (parts.length !== 3) {
-      return '';
-    }
-    
-    const [ivHex, tagHex, encryptedHex] = parts;
-    const iv = Buffer.from(ivHex, 'hex');
-    const tag = Buffer.from(tagHex, 'hex');
-    
-    const decipher = crypto.createDecipheriv('aes-256-gcm', MASTER_KEY, iv);
-    decipher.setAuthTag(tag);
-    
-    let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
-  } catch (err) {
-    console.warn('Decryption error caught (returning empty):', err instanceof Error ? err.message : err);
-    return '';
+  const parts = encryptedPayload.split(':');
+  if (parts.length !== 3) {
+    throw new Error('Invalid encrypted payload format');
   }
+  
+  const [ivHex, tagHex, encryptedHex] = parts;
+  const iv = Buffer.from(ivHex, 'hex');
+  const tag = Buffer.from(tagHex, 'hex');
+  
+  const decipher = crypto.createDecipheriv('aes-256-gcm', MASTER_KEY, iv);
+  decipher.setAuthTag(tag);
+  
+  let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
 }
 
 /**

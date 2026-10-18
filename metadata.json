@@ -1,6 +1,6 @@
 {
   "name": "AI Debate Arena: Living Stone",
-  "description": "An interactive AI vs AI debate platform featuring Atheist AI and Believer AI, with independent Gemini API & TTS voice configuration, live audio debates, audience questions, and community voting.",
+  "description": "Universal all-topics AI vs AI debate platform featuring configurable debater profiles, custom positions and Gemini models, live audio debates, audience cross-examination, and community voting.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

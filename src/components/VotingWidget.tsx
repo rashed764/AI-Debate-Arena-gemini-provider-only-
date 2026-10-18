@@ -1,20 +1,39 @@
 import React, { useState } from 'react';
-import { ThumbsUp, Award, Check, BarChart3, HelpCircle } from 'lucide-react';
-import { PersonaType, DebateSummary } from '../types';
+import { ThumbsUp, Award, Check, BarChart3 } from 'lucide-react';
+import { AccentColor, DebateSummary } from '../types';
 
 interface VotingWidgetProps {
   debateId: string;
-  votes: { atheist: number; believer: number; total: number };
-  userVotedPersona: PersonaType | null;
-  onCastVote: (persona: PersonaType, note?: string) => Promise<void>;
+  debater1Name: string;
+  debater2Name: string;
+  debater1Color?: AccentColor;
+  debater2Color?: AccentColor;
+  votes: { debater1: number; debater2: number; total: number; atheist?: number; believer?: number };
+  userVotedSide: 'debater1' | 'debater2' | string | null;
+  onCastVote: (side: 'debater1' | 'debater2') => Promise<void>;
   isDebateActive: boolean;
   summary?: DebateSummary;
 }
 
+const COLOR_MAP: Record<string, { text: string; bg: string; border: string; bar: string; btnActive: string }> = {
+  cyan: { text: 'text-cyan-400', bg: 'bg-cyan-950/40', border: 'border-cyan-500/40', bar: 'from-cyan-600 to-cyan-400', btnActive: 'border-cyan-400 bg-cyan-950/70 text-cyan-300' },
+  amber: { text: 'text-amber-400', bg: 'bg-amber-950/40', border: 'border-amber-500/40', bar: 'from-amber-400 to-amber-600', btnActive: 'border-amber-400 bg-amber-950/70 text-amber-300' },
+  emerald: { text: 'text-emerald-400', bg: 'bg-emerald-950/40', border: 'border-emerald-500/40', bar: 'from-emerald-500 to-teal-400', btnActive: 'border-emerald-400 bg-emerald-950/70 text-emerald-300' },
+  purple: { text: 'text-purple-400', bg: 'bg-purple-950/40', border: 'border-purple-500/40', bar: 'from-purple-500 to-fuchsia-400', btnActive: 'border-purple-400 bg-purple-950/70 text-purple-300' },
+  rose: { text: 'text-rose-400', bg: 'bg-rose-950/40', border: 'border-rose-500/40', bar: 'from-rose-500 to-pink-400', btnActive: 'border-rose-400 bg-rose-950/70 text-rose-300' },
+  blue: { text: 'text-blue-400', bg: 'bg-blue-950/40', border: 'border-blue-500/40', bar: 'from-blue-500 to-indigo-400', btnActive: 'border-blue-400 bg-blue-950/70 text-blue-300' },
+  indigo: { text: 'text-indigo-400', bg: 'bg-indigo-950/40', border: 'border-indigo-500/40', bar: 'from-indigo-500 to-violet-400', btnActive: 'border-indigo-400 bg-indigo-950/70 text-indigo-300' },
+  orange: { text: 'text-orange-400', bg: 'bg-orange-950/40', border: 'border-orange-500/40', bar: 'from-orange-500 to-amber-400', btnActive: 'border-orange-400 bg-orange-950/70 text-orange-300' },
+};
+
 export const VotingWidget: React.FC<VotingWidgetProps> = ({
   debateId,
+  debater1Name,
+  debater2Name,
+  debater1Color = 'cyan',
+  debater2Color = 'amber',
   votes,
-  userVotedPersona,
+  userVotedSide,
   onCastVote,
   isDebateActive,
   summary,
@@ -22,18 +41,24 @@ export const VotingWidget: React.FC<VotingWidgetProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSummary, setShowSummary] = useState(true);
 
-  const atheistCount = votes.atheist || 0;
-  const believerCount = votes.believer || 0;
-  const totalCount = votes.total || atheistCount + believerCount || 1;
+  const d1Count = votes.debater1 ?? votes.atheist ?? 0;
+  const d2Count = votes.debater2 ?? votes.believer ?? 0;
+  const totalCount = votes.total || d1Count + d2Count || 1;
 
-  const atheistPercent = Math.round((atheistCount / totalCount) * 100) || 50;
-  const believerPercent = 100 - atheistPercent;
+  const d1Percent = Math.round((d1Count / totalCount) * 100) || 50;
+  const d2Percent = 100 - d1Percent;
 
-  const handleVote = async (persona: PersonaType) => {
-    if (userVotedPersona || isSubmitting) return;
+  const d1Theme = COLOR_MAP[debater1Color] || COLOR_MAP.cyan;
+  const d2Theme = COLOR_MAP[debater2Color] || COLOR_MAP.amber;
+
+  const isD1Voted = userVotedSide === 'debater1' || userVotedSide === 'atheist';
+  const isD2Voted = userVotedSide === 'debater2' || userVotedSide === 'believer';
+
+  const handleVote = async (side: 'debater1' | 'debater2') => {
+    if (userVotedSide || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      await onCastVote(persona);
+      await onCastVote(side);
     } finally {
       setIsSubmitting(false);
     }
@@ -56,77 +81,77 @@ export const VotingWidget: React.FC<VotingWidgetProps> = ({
       {/* Visual Tug-of-war Bar */}
       <div className="mt-4">
         <div className="flex items-center justify-between text-xs font-bold mb-1.5">
-          <span className="text-cyan-400">Atheist AI: {atheistPercent}% ({atheistCount})</span>
-          <span className="text-amber-400">Believer AI: {believerPercent}% ({believerCount})</span>
+          <span className={d1Theme.text}>{debater1Name}: {d1Percent}% ({d1Count})</span>
+          <span className={d2Theme.text}>{debater2Name}: {d2Percent}% ({d2Count})</span>
         </div>
         <div className="h-3 w-full overflow-hidden rounded-full bg-slate-800 flex shadow-inner">
           <div
-            style={{ width: `${atheistPercent}%` }}
-            className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 transition-all duration-500"
+            style={{ width: `${d1Percent}%` }}
+            className={`h-full bg-gradient-to-r ${d1Theme.bar} transition-all duration-500`}
           />
           <div
-            style={{ width: `${believerPercent}%` }}
-            className="h-full bg-gradient-to-r from-amber-400 to-amber-600 transition-all duration-500"
+            style={{ width: `${d2Percent}%` }}
+            className={`h-full bg-gradient-to-r ${d2Theme.bar} transition-all duration-500`}
           />
         </div>
       </div>
 
       {/* Voting Action Buttons */}
       <div className="mt-5 grid grid-cols-2 gap-3">
-        {/* Atheist AI Vote Button */}
+        {/* Debater 1 Vote Button */}
         <button
-          onClick={() => handleVote('atheist')}
-          disabled={!!userVotedPersona || isSubmitting}
+          onClick={() => handleVote('debater1')}
+          disabled={!!userVotedSide || isSubmitting}
           className={`flex items-center justify-center gap-2 rounded-xl py-2.5 px-3 text-xs font-bold transition active:scale-95 ${
-            userVotedPersona === 'atheist'
-              ? 'border-2 border-cyan-400 bg-cyan-950/70 text-cyan-300'
-              : userVotedPersona
+            isD1Voted
+              ? `border-2 ${d1Theme.btnActive}`
+              : userVotedSide
               ? 'border border-slate-800 bg-slate-950/40 text-slate-500 opacity-50 cursor-not-allowed'
-              : 'border border-cyan-500/40 bg-cyan-950/40 text-cyan-300 hover:bg-cyan-900/50 shadow-lg shadow-cyan-950/40'
+              : `border ${d1Theme.border} ${d1Theme.bg} ${d1Theme.text} hover:opacity-90 shadow-lg`
           }`}
         >
-          {userVotedPersona === 'atheist' ? (
+          {isD1Voted ? (
             <>
-              <Check className="h-4 w-4 text-cyan-400" />
-              <span>Voted for Atheist AI</span>
+              <Check className="h-4 w-4" />
+              <span>Voted for {debater1Name}</span>
             </>
           ) : (
             <>
-              <ThumbsUp className="h-4 w-4 text-cyan-400" />
-              <span>Vote Atheist AI</span>
+              <ThumbsUp className="h-4 w-4" />
+              <span className="truncate">Vote {debater1Name}</span>
             </>
           )}
         </button>
 
-        {/* Believer AI Vote Button */}
+        {/* Debater 2 Vote Button */}
         <button
-          onClick={() => handleVote('believer')}
-          disabled={!!userVotedPersona || isSubmitting}
+          onClick={() => handleVote('debater2')}
+          disabled={!!userVotedSide || isSubmitting}
           className={`flex items-center justify-center gap-2 rounded-xl py-2.5 px-3 text-xs font-bold transition active:scale-95 ${
-            userVotedPersona === 'believer'
-              ? 'border-2 border-amber-400 bg-amber-950/70 text-amber-300'
-              : userVotedPersona
+            isD2Voted
+              ? `border-2 ${d2Theme.btnActive}`
+              : userVotedSide
               ? 'border border-slate-800 bg-slate-950/40 text-slate-500 opacity-50 cursor-not-allowed'
-              : 'border border-amber-500/40 bg-amber-950/40 text-amber-300 hover:bg-amber-900/50 shadow-lg shadow-amber-950/40'
+              : `border ${d2Theme.border} ${d2Theme.bg} ${d2Theme.text} hover:opacity-90 shadow-lg`
           }`}
         >
-          {userVotedPersona === 'believer' ? (
+          {isD2Voted ? (
             <>
-              <Check className="h-4 w-4 text-amber-400" />
-              <span>Voted for Believer AI</span>
+              <Check className="h-4 w-4" />
+              <span>Voted for {debater2Name}</span>
             </>
           ) : (
             <>
-              <ThumbsUp className="h-4 w-4 text-amber-400" />
-              <span>Vote Believer AI</span>
+              <ThumbsUp className="h-4 w-4" />
+              <span className="truncate">Vote {debater2Name}</span>
             </>
           )}
         </button>
       </div>
 
-      {userVotedPersona && (
+      {userVotedSide && (
         <p className="mt-2.5 text-center text-[11px] text-slate-400">
-          Your vote is recorded securely on the blockchain-grade ledger. One vote per viewer.
+          Your vote is recorded securely on the debate ledger. One vote per viewer.
         </p>
       )}
 
@@ -136,7 +161,7 @@ export const VotingWidget: React.FC<VotingWidgetProps> = ({
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
               <Award className="h-3.5 w-3.5 text-amber-400" />
-              <span>Philosophical Argument Analysis</span>
+              <span>Argument &amp; Dialectic Analysis</span>
             </span>
             <button
               onClick={() => setShowSummary(!showSummary)}
@@ -148,28 +173,30 @@ export const VotingWidget: React.FC<VotingWidgetProps> = ({
 
           {showSummary && (
             <div className="space-y-3 text-xs">
-              <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/20 p-3">
-                <span className="font-semibold text-cyan-300">Atheist AI Strongest Arguments:</span>
+              <div className={`rounded-xl border ${d1Theme.border} ${d1Theme.bg} p-3`}>
+                <span className={`font-semibold ${d1Theme.text}`}>{debater1Name} Strongest Points:</span>
                 <ul className="mt-1 list-disc pl-4 space-y-0.5 text-slate-300">
-                  {summary.atheistStrongPoints.map((pt, i) => (
+                  {(summary.debater1StrongPoints || summary.atheistStrongPoints || []).map((pt, i) => (
                     <li key={i}>{pt}</li>
                   ))}
                 </ul>
               </div>
 
-              <div className="rounded-xl border border-amber-500/20 bg-amber-950/20 p-3">
-                <span className="font-semibold text-amber-300">Believer AI Strongest Arguments:</span>
+              <div className={`rounded-xl border ${d2Theme.border} ${d2Theme.bg} p-3`}>
+                <span className={`font-semibold ${d2Theme.text}`}>{debater2Name} Strongest Points:</span>
                 <ul className="mt-1 list-disc pl-4 space-y-0.5 text-slate-300">
-                  {summary.believerStrongPoints.map((pt, i) => (
+                  {(summary.debater2StrongPoints || summary.believerStrongPoints || []).map((pt, i) => (
                     <li key={i}>{pt}</li>
                   ))}
                 </ul>
               </div>
 
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-slate-400">
-                <span className="font-semibold text-slate-200">Overall Synthesis:</span>
-                <p className="mt-1 leading-relaxed">{summary.overallAssessment}</p>
-              </div>
+              {summary.overallAssessment && (
+                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-slate-400">
+                  <span className="font-semibold text-slate-200">Overall Synthesis:</span>
+                  <p className="mt-1 leading-relaxed">{summary.overallAssessment}</p>
+                </div>
+              )}
             </div>
           )}
         </div>

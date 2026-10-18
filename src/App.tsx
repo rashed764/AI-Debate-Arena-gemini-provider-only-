@@ -5,15 +5,16 @@ import { DebateList } from './components/DebateList';
 import { AISettingsView } from './components/AISettingsModal';
 import { CreateDebateModal } from './components/CreateDebateModal';
 import { AudioPlaybackBar } from './components/AudioPlaybackBar';
-import { AIConfigPublic, Debate, DebateTurn, PersonaType, PlaybackMode } from './types';
+import { AIConfigPublic, DebaterProfilePublic, Debate, DebateTurn, PersonaType, PlaybackMode } from './types';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<'arena' | 'list' | 'settings'>('arena');
   const [debates, setDebates] = useState<Debate[]>([]);
+  const [profiles, setProfiles] = useState<DebaterProfilePublic[]>([]);
   const [activeDebateId, setActiveDebateId] = useState<string | null>(null);
   const [activeDebate, setActiveDebate] = useState<Debate | null>(null);
 
-  // Configurations
+  // Legacy configuration state
   const [atheistConfig, setAtheistConfig] = useState<AIConfigPublic | undefined>();
   const [believerConfig, setBelieverConfig] = useState<AIConfigPublic | undefined>();
 
@@ -22,10 +23,9 @@ export default function App() {
 
   // Admin authentication (open access)
   const [adminToken] = useState<string>('open_access');
-  const [isAdmin] = useState<boolean>(true);
 
   // User voting status
-  const [userVotedPersona, setUserVotedPersona] = useState<PersonaType | null>(null);
+  const [userVotedPersona, setUserVotedPersona] = useState<string | null>(null);
 
   // Global Audio Controller State
   const [playbackMode, setPlaybackMode] = useState<PlaybackMode>('text_and_voice');
@@ -86,7 +86,7 @@ export default function App() {
 
     setActivePlayingMessageId(turn.id);
     activePlayingMessageIdRef.current = turn.id;
-    setActiveSpeaker(turn.persona);
+    setActiveSpeaker(turn.speakerSide || (turn.persona === 'believer' ? 'debater2' : 'debater1'));
     setCurrentStatementTitle(`${turn.speakerName}: ${turn.mainClaim.slice(0, 55)}...`);
     setWaitingForMessageId(null);
     waitingForMessageIdRef.current = null;
@@ -198,7 +198,19 @@ export default function App() {
     }
   }, [volume, isMuted, speed]);
 
-  // Load debates and AI configs on start
+  // Load debates and profiles on start
+  const fetchProfiles = async () => {
+    try {
+      const res = await fetch('/api/profiles');
+      if (res.ok) {
+        const data = await res.json();
+        setProfiles(data.profiles || []);
+      }
+    } catch (err) {
+      console.error('Failed to load debater profiles:', err);
+    }
+  };
+
   const fetchConfigs = async () => {
     try {
       const res = await fetch('/api/admin/ai-config');
@@ -210,6 +222,7 @@ export default function App() {
     } catch (err) {
       console.error('Failed to load AI configs:', err);
     }
+    await fetchProfiles();
   };
 
   const fetchDebates = async () => {
@@ -226,11 +239,6 @@ export default function App() {
       console.error('Failed to load debates:', err);
     }
   };
-
-  // Open access verification
-  useEffect(() => {
-    // Admin system removed - open access
-  }, [adminToken]);
 
   useEffect(() => {
     fetchConfigs();
@@ -255,13 +263,13 @@ export default function App() {
     fetch(`/api/debates/${activeDebateId}/user-vote`)
       .then(res => res.json())
       .then(data => {
-        if (data.voted) setUserVotedPersona(data.persona || null);
+        if (data.voted) setUserVotedPersona(data.targetSide || data.persona || null);
         else setUserVotedPersona(null);
       })
       .catch(() => setUserVotedPersona(null));
   }, [activeDebateId]);
 
-  // SSE Real-Time Updates Subscription (Stable connection dependent only on debate ID)
+  // SSE Real-Time Updates Subscription
   useEffect(() => {
     if (!activeDebateId) return;
 
@@ -321,7 +329,6 @@ export default function App() {
 
         if (!isPlaying) {
           if (!currentId) {
-            // Nothing played yet; play if it's the first message
             isNextInSequence = msgIndex === 0;
           } else {
             const currentIdx = debate.messages.findIndex(m => m.id === currentId);
@@ -416,7 +423,6 @@ export default function App() {
           return;
         }
       }
-      // Otherwise play latest available message with audio
       const available = activeDebate?.messages.filter(m => m.audioStatus === 'ready' && m.audioUrl);
       if (available && available.length > 0) {
         playTurnAudio(available[0], true);
@@ -516,16 +522,16 @@ export default function App() {
     setActiveDebate(prev => (prev ? { ...prev, status: 'completed' } : prev));
   };
 
-  const handleCastVote = async (persona: PersonaType, note?: string) => {
+  const handleCastVote = async (side: 'debater1' | 'debater2', note?: string) => {
     if (!activeDebateId) return;
     const res = await fetch(`/api/debates/${activeDebateId}/votes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ persona, reasoningNote: note }),
+      body: JSON.stringify({ side, reasoningNote: note }),
     });
     const data = await res.json();
     if (res.ok) {
-      setUserVotedPersona(persona);
+      setUserVotedPersona(side);
       setActiveDebate(prev => (prev ? { ...prev, votes: data.votes } : prev));
     } else {
       alert(data.error || 'Vote could not be processed');
@@ -565,6 +571,29 @@ export default function App() {
     }
   };
 
+  const handleDeleteDebate = async (id: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/debates/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setDebates(prev => prev.filter(d => d.id !== id));
+        if (activeDebateId === id) {
+          const remaining = debates.filter(d => d.id !== id);
+          if (remaining.length > 0) {
+            setActiveDebateId(remaining[0].id);
+          } else {
+            setActiveDebateId(null);
+            setActiveDebate(null);
+          }
+        }
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Failed to delete debate:', err);
+      return false;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-slate-950">
       {/* Top Navbar */}
@@ -575,8 +604,9 @@ export default function App() {
         openAdminModal={() => {}}
         isAdmin={true}
         onLogoutAdmin={() => {}}
-        atheistConfig={atheistConfig}
-        believerConfig={believerConfig}
+        profiles={profiles}
+        activeDebater1Name={activeDebate?.debater1?.name}
+        activeDebater2Name={activeDebate?.debater2?.name}
       />
 
       {/* Main View Router */}
@@ -605,6 +635,7 @@ export default function App() {
             isAudioPlaying={isAudioPlaying}
             autoplayBlocked={autoplayBlocked}
             onUnlockAudio={handleUnlockAudio}
+            audioElement={audioElementRef.current}
           />
         )}
 
@@ -615,6 +646,7 @@ export default function App() {
               setActiveDebateId(id);
               setCurrentView('arena');
             }}
+            onDeleteDebate={handleDeleteDebate}
             openCreateModal={() => setIsCreateModalOpen(true)}
             openSettings={() => setCurrentView('settings')}
           />
@@ -657,6 +689,7 @@ export default function App() {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onCreate={handleCreateDebate}
+        profiles={profiles}
       />
     </div>
   );

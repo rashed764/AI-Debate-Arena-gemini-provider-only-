@@ -15,9 +15,14 @@ import {
   BrainCircuit,
   Lock,
   Play,
-  RotateCcw
+  RotateCcw,
+  Plus,
+  Edit2,
+  User,
+  Palette,
+  Power
 } from 'lucide-react';
-import { AIConfigPublic, PersonaType } from '../types';
+import { DebaterProfilePublic, AccentColor, AIConfigPublic } from '../types';
 
 interface AISettingsProps {
   isAdmin: boolean;
@@ -34,7 +39,6 @@ const AVAILABLE_TEXT_MODELS = [
   { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite (Lightweight, Free tier available)' },
   { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite (High Throughput)' },
   { id: 'gemini-4-argon', name: 'Gemini 4 Argon (High Thinking & Complex Reasoning, Paid Tier)' },
-  { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash (Deprecated / Legacy - Auto-routes to replacement)' },
 ];
 
 const AVAILABLE_TTS_MODELS = [
@@ -50,527 +54,671 @@ const AVAILABLE_VOICES = [
   { id: 'Zephyr', desc: 'Smooth, intellectual, balanced' },
 ];
 
+const ACCENT_COLORS: Array<{ id: AccentColor; label: string; bg: string; border: string }> = [
+  { id: 'cyan', label: 'Electric Blue / Cyan', bg: 'bg-cyan-500', border: 'border-cyan-400' },
+  { id: 'amber', label: 'Warm Gold / Amber', bg: 'bg-amber-500', border: 'border-amber-400' },
+  { id: 'emerald', label: 'Emerald Green', bg: 'bg-emerald-500', border: 'border-emerald-400' },
+  { id: 'purple', label: 'Cosmic Purple', bg: 'bg-purple-500', border: 'border-purple-400' },
+  { id: 'rose', label: 'Crimson Rose', bg: 'bg-rose-500', border: 'border-rose-400' },
+  { id: 'blue', label: 'Royal Blue', bg: 'bg-blue-500', border: 'border-blue-400' },
+  { id: 'indigo', label: 'Deep Indigo', bg: 'bg-indigo-500', border: 'border-indigo-400' },
+  { id: 'orange', label: 'Solar Orange', bg: 'bg-orange-500', border: 'border-orange-400' },
+];
+
+const PRESET_AVATARS = [
+  { label: 'Analytical Scholar', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop' },
+  { label: 'Philosophical Theologian', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=600&auto=format&fit=crop' },
+  { label: 'Energy Researcher', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=600&auto=format&fit=crop' },
+  { label: 'Policy Analyst', url: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=600&auto=format&fit=crop' },
+  { label: 'Scientific Specialist', url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=600&auto=format&fit=crop' },
+  { label: 'Futurist Ethicist', url: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=600&auto=format&fit=crop' },
+];
+
 export const AISettingsView: React.FC<AISettingsProps> = ({
   isAdmin,
   openAdminModal,
   onRefreshConfigs,
-  atheistConfig,
-  believerConfig,
-  adminToken,
 }) => {
-  // Local state for Atheist AI form
-  const [atheistKeyInput, setAtheistKeyInput] = useState('');
-  const [showAtheistKey, setShowAtheistKey] = useState(false);
-  const [atheistModel, setAtheistModel] = useState(atheistConfig?.modelId || 'gemini-3.8-flash');
-  const [atheistTtsModel, setAtheistTtsModel] = useState(atheistConfig?.ttsModelId || 'gemini-3.8-flash-lite-tts');
-  const [atheistVoice, setAtheistVoice] = useState(atheistConfig?.voiceName || 'Fenrir');
-  const [atheistStyle, setAtheistStyle] = useState(atheistConfig?.voiceStyle || 'Analytical, evidence-focused, precise, skeptical philosopher');
-  const [atheistSpeed, setAtheistSpeed] = useState(atheistConfig?.voiceSpeed ?? 1.0);
-  const [atheistTtsEnabled, setAtheistTtsEnabled] = useState(atheistConfig?.ttsEnabled ?? true);
-  const [atheistSearch, setAtheistSearch] = useState(atheistConfig?.searchGroundingEnabled ?? true);
-  const [atheistThinking, setAtheistThinking] = useState(atheistConfig?.thinkingLevel || 'HIGH');
+  const [profiles, setProfiles] = useState<DebaterProfilePublic[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
 
-  // Local state for Believer AI form
-  const [believerKeyInput, setBelieverKeyInput] = useState('');
-  const [showBelieverKey, setShowBelieverKey] = useState(false);
-  const [believerModel, setBelieverModel] = useState(believerConfig?.modelId || 'gemini-3.8-flash');
-  const [believerTtsModel, setBelieverTtsModel] = useState(believerConfig?.ttsModelId || 'gemini-3.8-flash-lite-tts');
-  const [believerVoice, setBelieverVoice] = useState(believerConfig?.voiceName || 'Kore');
-  const [believerStyle, setBelieverStyle] = useState(believerConfig?.voiceStyle || 'Philosophical, articulate, thoughtful, logical theologian');
-  const [believerSpeed, setBelieverSpeed] = useState(believerConfig?.voiceSpeed ?? 1.0);
-  const [believerTtsEnabled, setBelieverTtsEnabled] = useState(believerConfig?.ttsEnabled ?? true);
-  const [believerSearch, setBelieverSearch] = useState(believerConfig?.searchGroundingEnabled ?? true);
-  const [believerThinking, setBelieverThinking] = useState(believerConfig?.thinkingLevel || 'HIGH');
+  // Form State for editing / creating
+  const [isCreatingNew, setIsCreatingNew] = useState(false);
+  const [formName, setFormName] = useState('');
+  const [formPosition, setFormPosition] = useState('');
+  const [formTopicScope, setFormTopicScope] = useState('All Topics');
+  const [formPersona, setFormPersona] = useState('');
+  const [formStatus, setFormStatus] = useState<'enabled' | 'disabled'>('enabled');
+  const [formModelId, setFormModelId] = useState('gemini-3.8-flash');
+  const [formTtsModelId, setFormTtsModelId] = useState('gemini-3.8-flash-lite-tts');
+  const [formVoiceName, setFormVoiceName] = useState('Fenrir');
+  const [formVoiceStyle, setFormVoiceStyle] = useState('Analytical, evidence-focused, precise');
+  const [formVoiceSpeed, setFormVoiceSpeed] = useState(1.0);
+  const [formTtsEnabled, setFormTtsEnabled] = useState(true);
+  const [formSearchGrounding, setFormSearchGrounding] = useState(true);
+  const [formThinkingLevel, setFormThinkingLevel] = useState<'HIGH' | 'MEDIUM' | 'LOW' | 'MINIMAL'>('HIGH');
+  const [formAvatarUrl, setFormAvatarUrl] = useState('');
+  const [formAccentColor, setFormAccentColor] = useState<AccentColor>('cyan');
+  const [rawApiKeyInput, setRawApiKeyInput] = useState('');
+  const [showApiKey, setShowApiKey] = useState(false);
 
-  // Testing & Status state
-  const [testingAtheist, setTestingAtheist] = useState(false);
-  const [testingAtheistVoice, setTestingAtheistVoice] = useState(false);
-  const [atheistAudioSampleUrl, setAtheistAudioSampleUrl] = useState<string | null>(null);
-  const [atheistFeedback, setAtheistFeedback] = useState<{ success?: boolean; message?: string } | null>(null);
+  // Testing Feedback
+  const [testingModel, setTestingModel] = useState(false);
+  const [modelTestResult, setModelTestResult] = useState<{ success?: boolean; message?: string } | null>(null);
+  const [testingVoice, setTestingVoice] = useState(false);
+  const [voiceTestResult, setVoiceTestResult] = useState<{ success?: boolean; message?: string; audioUrl?: string } | null>(null);
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
 
-  const [testingBeliever, setTestingBeliever] = useState(false);
-  const [testingBelieverVoice, setTestingBelieverVoice] = useState(false);
-  const [believerAudioSampleUrl, setBelieverAudioSampleUrl] = useState<string | null>(null);
-  const [believerFeedback, setBelieverFeedback] = useState<{ success?: boolean; message?: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+  const [saveErrorMsg, setSaveErrorMsg] = useState<string | null>(null);
 
-  const [savingAtheist, setSavingAtheist] = useState(false);
-  const [savingBeliever, setSavingBeliever] = useState(false);
+  // Delete State
+  const [profileToDelete, setProfileToDelete] = useState<DebaterProfilePublic | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // Sync initial configs
+  // Load profiles
+  const fetchProfiles = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/profiles');
+      const data = await res.json();
+      if (Array.isArray(data.profiles)) {
+        setProfiles(data.profiles);
+        // Default to first profile if none selected
+        if (!selectedProfileId && data.profiles.length > 0 && !isCreatingNew) {
+          selectProfile(data.profiles[0]);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load debater profiles:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (atheistConfig) {
-      setAtheistModel(atheistConfig.modelId);
-      setAtheistTtsModel(atheistConfig.ttsModelId);
-      setAtheistVoice(atheistConfig.voiceName);
-      setAtheistStyle(atheistConfig.voiceStyle);
-      setAtheistSpeed(atheistConfig.voiceSpeed);
-      setAtheistTtsEnabled(atheistConfig.ttsEnabled);
-      setAtheistSearch(atheistConfig.searchGroundingEnabled);
-      setAtheistThinking(atheistConfig.thinkingLevel);
-    }
-  }, [atheistConfig]);
+    fetchProfiles();
+  }, []);
 
-  useEffect(() => {
-    if (believerConfig) {
-      setBelieverModel(believerConfig.modelId);
-      setBelieverTtsModel(believerConfig.ttsModelId);
-      setBelieverVoice(believerConfig.voiceName);
-      setBelieverStyle(believerConfig.voiceStyle);
-      setBelieverSpeed(believerConfig.voiceSpeed);
-      setBelieverTtsEnabled(believerConfig.ttsEnabled);
-      setBelieverSearch(believerConfig.searchGroundingEnabled);
-      setBelieverThinking(believerConfig.thinkingLevel);
-    }
-  }, [believerConfig]);
-
-  // Handle Save
-  const handleSave = async (persona: PersonaType) => {
-    if (!isAdmin) {
-      openAdminModal();
-      return;
-    }
-
-    if (persona === 'atheist') {
-      setSavingAtheist(true);
-      setAtheistFeedback(null);
-      try {
-        const res = await fetch('/api/admin/ai-config/atheist', {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${adminToken}`,
-          },
-          body: JSON.stringify({
-            rawApiKey: atheistKeyInput.trim() !== '' ? atheistKeyInput.trim() : undefined,
-            modelId: atheistModel,
-            ttsModelId: atheistTtsModel,
-            voiceName: atheistVoice,
-            voiceStyle: atheistStyle,
-            voiceSpeed: atheistSpeed,
-            ttsEnabled: atheistTtsEnabled,
-            searchGroundingEnabled: atheistSearch,
-            thinkingLevel: atheistThinking,
-          }),
-        });
-        const data = await res.json();
-        if (res.ok) {
-          setAtheistFeedback({ success: true, message: 'Atheist AI configuration saved successfully!' });
-          setAtheistKeyInput('');
-          await onRefreshConfigs();
-        } else {
-          setAtheistFeedback({ success: false, message: data.error || 'Failed to save configuration.' });
-        }
-      } catch (err) {
-        setAtheistFeedback({ success: false, message: 'Network error saving configuration.' });
-      } finally {
-        setSavingAtheist(false);
-      }
-    } else {
-      setSavingBeliever(true);
-      setBelieverFeedback(null);
-      try {
-        const res = await fetch('/api/admin/ai-config/believer', {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${adminToken}`,
-          },
-          body: JSON.stringify({
-            rawApiKey: believerKeyInput.trim() !== '' ? believerKeyInput.trim() : undefined,
-            modelId: believerModel,
-            ttsModelId: believerTtsModel,
-            voiceName: believerVoice,
-            voiceStyle: believerStyle,
-            voiceSpeed: believerSpeed,
-            ttsEnabled: believerTtsEnabled,
-            searchGroundingEnabled: believerSearch,
-            thinkingLevel: believerThinking,
-          }),
-        });
-        const data = await res.json();
-        if (res.ok) {
-          setBelieverFeedback({ success: true, message: 'Believer AI configuration saved successfully!' });
-          setBelieverKeyInput('');
-          await onRefreshConfigs();
-        } else {
-          setBelieverFeedback({ success: false, message: data.error || 'Failed to save configuration.' });
-        }
-      } catch (err) {
-        setBelieverFeedback({ success: false, message: 'Network error saving configuration.' });
-      } finally {
-        setSavingBeliever(false);
-      }
-    }
+  const selectProfile = (p: DebaterProfilePublic) => {
+    setIsCreatingNew(false);
+    setSelectedProfileId(p.id);
+    setFormName(p.name);
+    setFormPosition(p.position);
+    setFormTopicScope(p.topicScope || 'All Topics');
+    setFormPersona(p.persona || '');
+    setFormStatus(p.status);
+    setFormModelId(p.modelId || 'gemini-3.8-flash');
+    setFormTtsModelId(p.ttsModelId || 'gemini-3.8-flash-lite-tts');
+    setFormVoiceName(p.voiceName || 'Fenrir');
+    setFormVoiceStyle(p.voiceStyle || '');
+    setFormVoiceSpeed(p.voiceSpeed ?? 1.0);
+    setFormTtsEnabled(p.ttsEnabled ?? true);
+    setFormSearchGrounding(p.searchGroundingEnabled ?? true);
+    setFormThinkingLevel(p.thinkingLevel || 'HIGH');
+    setFormAvatarUrl(p.avatarUrl || '');
+    setFormAccentColor(p.accentColor || 'cyan');
+    setRawApiKeyInput('');
+    setShowApiKey(false);
+    setModelTestResult(null);
+    setVoiceTestResult(null);
+    setSaveSuccessMsg(null);
+    setSaveErrorMsg(null);
   };
 
-  // Handle Test Text Connection
-  const handleTestConnection = async (persona: PersonaType) => {
-    if (!isAdmin) {
-      openAdminModal();
-      return;
-    }
-
-    if (persona === 'atheist') {
-      setTestingAtheist(true);
-      setAtheistFeedback(null);
-      try {
-        const res = await fetch('/api/admin/ai-config/atheist/test', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${adminToken}`,
-          },
-          body: JSON.stringify({
-            apiKeyOverride: atheistKeyInput.trim() || undefined,
-            modelIdOverride: atheistModel,
-          }),
-        });
-        const data = await res.json();
-        setAtheistFeedback({ success: data.success, message: data.message });
-        await onRefreshConfigs();
-      } catch (err) {
-        setAtheistFeedback({ success: false, message: 'Connection test request failed.' });
-      } finally {
-        setTestingAtheist(false);
-      }
-    } else {
-      setTestingBeliever(true);
-      setBelieverFeedback(null);
-      try {
-        const res = await fetch('/api/admin/ai-config/believer/test', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${adminToken}`,
-          },
-          body: JSON.stringify({
-            apiKeyOverride: believerKeyInput.trim() || undefined,
-            modelIdOverride: believerModel,
-          }),
-        });
-        const data = await res.json();
-        setBelieverFeedback({ success: data.success, message: data.message });
-        await onRefreshConfigs();
-      } catch (err) {
-        setBelieverFeedback({ success: false, message: 'Connection test request failed.' });
-      } finally {
-        setTestingBeliever(false);
-      }
-    }
+  const handleStartCreateNew = () => {
+    setIsCreatingNew(true);
+    setSelectedProfileId(null);
+    setFormName('');
+    setFormPosition('');
+    setFormTopicScope('All Topics');
+    setFormPersona('An articulate, evidence-driven debater specializing in rigorous analysis and reasoned discourse.');
+    setFormStatus('enabled');
+    setFormModelId('gemini-3.8-flash');
+    setFormTtsModelId('gemini-3.8-flash-lite-tts');
+    setFormVoiceName('Zephyr');
+    setFormVoiceStyle('Clear, professional, confident');
+    setFormVoiceSpeed(1.0);
+    setFormTtsEnabled(true);
+    setFormSearchGrounding(true);
+    setFormThinkingLevel('HIGH');
+    setFormAvatarUrl(PRESET_AVATARS[2].url);
+    setFormAccentColor('emerald');
+    setRawApiKeyInput('');
+    setShowApiKey(false);
+    setModelTestResult(null);
+    setVoiceTestResult(null);
+    setSaveSuccessMsg(null);
+    setSaveErrorMsg(null);
   };
 
-  // Handle Test Voice Synthesis
-  const handleTestVoice = async (persona: PersonaType) => {
-    if (!isAdmin) {
-      openAdminModal();
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formName.trim()) {
+      setSaveErrorMsg('Debater profile display name is required.');
+      return;
+    }
+    if (!formPosition.trim()) {
+      setSaveErrorMsg('Debater side / position is required.');
       return;
     }
 
-    if (persona === 'atheist') {
-      setTestingAtheistVoice(true);
-      setAtheistAudioSampleUrl(null);
-      try {
-        const res = await fetch('/api/admin/ai-config/atheist/test-voice', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${adminToken}`,
-          },
-          body: JSON.stringify({
-            apiKeyOverride: atheistKeyInput.trim() || undefined,
-            ttsModelOverride: atheistTtsModel,
-            voiceOverride: atheistVoice,
-            styleOverride: atheistStyle,
-          }),
-        });
-        const data = await res.json();
-        if (data.success && data.audioUrl) {
-          setAtheistAudioSampleUrl(data.audioUrl);
-          setAtheistFeedback({ success: true, message: data.message });
-        } else {
-          setAtheistFeedback({ success: false, message: data.message });
-        }
-      } catch (err) {
-        setAtheistFeedback({ success: false, message: 'Voice test request failed.' });
-      } finally {
-        setTestingAtheistVoice(false);
-      }
-    } else {
-      setTestingBelieverVoice(true);
-      setBelieverAudioSampleUrl(null);
-      try {
-        const res = await fetch('/api/admin/ai-config/believer/test-voice', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${adminToken}`,
-          },
-          body: JSON.stringify({
-            apiKeyOverride: believerKeyInput.trim() || undefined,
-            ttsModelOverride: believerTtsModel,
-            voiceOverride: believerVoice,
-            styleOverride: believerStyle,
-          }),
-        });
-        const data = await res.json();
-        if (data.success && data.audioUrl) {
-          setBelieverAudioSampleUrl(data.audioUrl);
-          setBelieverFeedback({ success: true, message: data.message });
-        } else {
-          setBelieverFeedback({ success: false, message: data.message });
-        }
-      } catch (err) {
-        setBelieverFeedback({ success: false, message: 'Voice test request failed.' });
-      } finally {
-        setTestingBelieverVoice(false);
-      }
-    }
-  };
+    setSaving(true);
+    setSaveSuccessMsg(null);
+    setSaveErrorMsg(null);
 
-  // Handle Remove Key
-  const handleRemoveKey = async (persona: PersonaType) => {
-    if (!isAdmin) {
-      openAdminModal();
-      return;
-    }
-    if (!window.confirm(`Are you sure you want to remove the stored API key for ${persona === 'atheist' ? 'Atheist AI' : 'Believer AI'}?`)) {
-      return;
-    }
+    const payload = {
+      name: formName.trim(),
+      position: formPosition.trim(),
+      topicScope: formTopicScope.trim() || 'All Topics',
+      persona: formPersona.trim(),
+      status: formStatus,
+      modelId: formModelId,
+      ttsModelId: formTtsModelId,
+      voiceName: formVoiceName,
+      voiceStyle: formVoiceStyle,
+      voiceSpeed: formVoiceSpeed,
+      ttsEnabled: formTtsEnabled,
+      searchGroundingEnabled: formSearchGrounding,
+      thinkingLevel: formThinkingLevel,
+      avatarUrl: formAvatarUrl.trim(),
+      accentColor: formAccentColor,
+      rawApiKey: rawApiKeyInput.trim() !== '' ? rawApiKeyInput.trim() : undefined,
+    };
 
     try {
-      const res = await fetch(`/api/admin/ai-config/${persona}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${adminToken}` },
+      const url = isCreatingNew ? '/api/profiles' : `/api/profiles/${selectedProfileId}`;
+      const method = isCreatingNew ? 'POST' : 'PUT';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
-      if (res.ok) {
-        await onRefreshConfigs();
-        if (persona === 'atheist') {
-          setAtheistFeedback({ success: true, message: 'Atheist API key removed from secure storage.' });
-        } else {
-          setBelieverFeedback({ success: true, message: 'Believer API key removed from secure storage.' });
-        }
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to save debater profile.');
       }
-    } catch {
-      // Ignored
+
+      setSaveSuccessMsg(
+        isCreatingNew
+          ? `Created profile "${data.profile?.name}" successfully!`
+          : `Updated profile "${data.profile?.name}" successfully!`
+      );
+      setRawApiKeyInput('');
+      await fetchProfiles();
+      if (data.profile) {
+        selectProfile(data.profile);
+      }
+      await onRefreshConfigs();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setSaveErrorMsg(msg);
+    } finally {
+      setSaving(false);
     }
   };
+
+  // Test Model Connection
+  const handleTestModel = async () => {
+    if (!selectedProfileId && !isCreatingNew) return;
+    setTestingModel(true);
+    setModelTestResult(null);
+
+    try {
+      const targetId = selectedProfileId || 'profile-atheist';
+      const res = await fetch(`/api/profiles/${targetId}/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKeyOverride: rawApiKeyInput.trim() || undefined,
+          modelIdOverride: formModelId,
+        }),
+      });
+      const data = await res.json();
+      setModelTestResult(data);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setModelTestResult({ success: false, message: `Test failed: ${msg}` });
+    } finally {
+      setTestingModel(false);
+    }
+  };
+
+  // Test Voice TTS
+  const handleTestVoice = async () => {
+    if (!selectedProfileId && !isCreatingNew) return;
+    setTestingVoice(true);
+    setVoiceTestResult(null);
+
+    try {
+      const targetId = selectedProfileId || 'profile-atheist';
+      const res = await fetch(`/api/profiles/${targetId}/test-voice`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKeyOverride: rawApiKeyInput.trim() || undefined,
+          ttsModelOverride: formTtsModelId,
+          voiceOverride: formVoiceName,
+          styleOverride: formVoiceStyle,
+        }),
+      });
+      const data = await res.json();
+      setVoiceTestResult(data);
+
+      if (data.audioUrl) {
+        if (audioElement) audioElement.pause();
+        const audio = new Audio(data.audioUrl);
+        setAudioElement(audio);
+        audio.play().catch(e => console.warn('Audio play blocked:', e));
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setVoiceTestResult({ success: false, message: `Voice test failed: ${msg}` });
+    } finally {
+      setTestingVoice(false);
+    }
+  };
+
+  // Delete Profile
+  const confirmDeleteProfile = async () => {
+    if (!profileToDelete) return;
+    setDeleting(true);
+    setDeleteError(null);
+
+    try {
+      const res = await fetch(`/api/profiles/${profileToDelete.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to delete profile.');
+      }
+      setProfileToDelete(null);
+      await fetchProfiles();
+      setSelectedProfileId(null);
+      handleStartCreateNew();
+      await onRefreshConfigs();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setDeleteError(msg);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const selectedProfile = profiles.find(p => p.id === selectedProfileId);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-      {/* Header */}
-      <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800 pb-6">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="rounded bg-indigo-950/80 px-2 py-0.5 text-xs font-semibold text-indigo-400 border border-indigo-800/50">
-              MANDATORY CORE CONFIGURATION
-            </span>
-            <span className="text-xs text-slate-400">Settings → AI API &amp; Voice Configuration</span>
+      {/* Page Header */}
+      <div className="border-b border-slate-800 pb-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-2.5">
+              <Cpu className="h-7 w-7 text-cyan-400" />
+              <span>Configurable AI Debater Profiles</span>
+            </h1>
+            <p className="mt-1 text-xs sm:text-sm text-slate-400">
+              Create, configure, test, and manage reusable AI debaters across any topic, model, stance, voice, and appearance.
+            </p>
           </div>
-          <h1 className="mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-            Dual AI Engine &amp; Voice Settings
-          </h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Configure independent Gemini API keys, LLM models, and distinct Gemini TTS speech synthesis for both Atheist AI and Believer AI.
-          </p>
-        </div>
 
-        {/* Admin Badge */}
-        <div>
-          {isAdmin ? (
-            <div className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-950/40 px-3.5 py-2 text-xs font-medium text-emerald-300">
-              <ShieldCheck className="h-4 w-4 text-emerald-400" />
-              <span>Admin Mode Active (Editing Enabled)</span>
-            </div>
-          ) : (
-            <button
-              onClick={openAdminModal}
-              className="flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-950/40 px-3.5 py-2 text-xs font-medium text-amber-300 hover:bg-amber-900/40 transition"
-            >
-              <Lock className="h-4 w-4 text-amber-400" />
-              <span>Unlock Admin Mode to Save Keys</span>
+          <button
+            onClick={handleStartCreateNew}
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-cyan-950 hover:opacity-90 transition active:scale-95"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Create New Profile</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left Column (4 cols): Profiles List */}
+        <div className="lg:col-span-4 space-y-3">
+          <div className="flex items-center justify-between text-xs text-slate-400 px-1 font-semibold">
+            <span>SAVED PROFILES ({profiles.length})</span>
+            <button onClick={fetchProfiles} className="hover:text-white flex items-center gap-1">
+              <RefreshCw className="h-3 w-3" />
+              <span>Refresh</span>
             </button>
-          )}
-        </div>
-      </div>
-
-      {/* Security Architecture Callout */}
-      <div className="mb-8 rounded-xl border border-slate-800 bg-slate-900/50 p-4 text-xs text-slate-300 flex items-start gap-3">
-        <ShieldCheck className="h-5 w-5 text-cyan-400 shrink-0 mt-0.5" />
-        <div>
-          <p className="font-semibold text-white">Server-Authoritative Secret Encryption (AES-256-GCM)</p>
-          <p className="mt-0.5 text-slate-400">
-            Keys entered below are encrypted at rest on the server and are <span className="text-cyan-300">never transmitted to the frontend bundle or GET responses</span>.
-            If environment variables are configured on the host, they serve as initial deployment fallbacks.
-          </p>
-        </div>
-      </div>
-
-      {/* Two Independent Panels */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* ========================================================== */}
-        {/* PANEL A: ATHEIST AI                                       */}
-        {/* ========================================================== */}
-        <div className="relative rounded-2xl border border-cyan-500/30 bg-gradient-to-b from-slate-900 via-slate-900/90 to-slate-950 p-6 shadow-xl shadow-cyan-950/20">
-          <div className="flex items-center justify-between border-b border-cyan-500/20 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-950 border border-cyan-500/40 text-cyan-400 font-extrabold text-sm">
-                A
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <span>Atheist AI</span>
-                  <span className="text-xs rounded bg-cyan-950 px-2 py-0.5 text-cyan-400 border border-cyan-500/30">
-                    Electric Blue
-                  </span>
-                </h2>
-                <p className="text-xs text-slate-400">Analytical, skeptical, evidence-focused persona</p>
-              </div>
-            </div>
-
-            {/* Status indicator */}
-            <div className="flex items-center gap-1.5 text-xs">
-              <span className={`h-2.5 w-2.5 rounded-full ${atheistConfig?.hasKey ? 'bg-cyan-400' : 'bg-rose-500'}`} />
-              <span className="font-medium text-slate-300 capitalize">
-                {atheistConfig?.hasKey ? atheistConfig.status : 'Not Configured'}
-              </span>
-            </div>
           </div>
 
-          <div className="mt-6 space-y-5">
-            {/* Gemini API Key */}
-            <div>
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                  <Key className="h-3.5 w-3.5 text-cyan-400" />
-                  <span>Gemini API Key</span>
-                </label>
-                {atheistConfig?.hasKey && (
-                  <span className="text-[11px] text-cyan-400">
-                    Active: <code className="font-mono">{atheistConfig.keyMask}</code> ({atheistConfig.keySource})
-                  </span>
-                )}
+          <div className="space-y-2">
+            {profiles.map(p => {
+              const isSelected = p.id === selectedProfileId && !isCreatingNew;
+              return (
+                <div
+                  key={p.id}
+                  onClick={() => selectProfile(p)}
+                  className={`group relative cursor-pointer rounded-2xl border p-3.5 transition flex items-center justify-between gap-3 ${
+                    isSelected
+                      ? 'border-cyan-400 bg-slate-900 shadow-lg shadow-cyan-950/40 ring-1 ring-cyan-500/40'
+                      : 'border-slate-800 bg-slate-950/70 hover:border-slate-700 hover:bg-slate-900/60'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    {/* Avatar preview */}
+                    <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-slate-700 bg-slate-900">
+                      <img src={p.avatarUrl} alt={p.name} className="h-full w-full object-cover" />
+                      <span
+                        className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-slate-950 ${
+                          p.status === 'enabled' ? 'bg-emerald-400' : 'bg-slate-600'
+                        }`}
+                      />
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="font-bold text-sm text-white truncate group-hover:text-cyan-300 transition">
+                          {p.name}
+                        </h4>
+                        <span
+                          className={`rounded px-1.5 py-0.2 text-[9px] font-semibold uppercase ${
+                            p.status === 'enabled'
+                              ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/40'
+                              : 'bg-slate-800 text-slate-400'
+                          }`}
+                        >
+                          {p.status}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                        {p.position}
+                      </p>
+                      <div className="mt-1 flex items-center gap-2 text-[10px] text-slate-500 font-mono">
+                        <span>{p.modelId}</span>
+                        <span>•</span>
+                        <span>{p.voiceName}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Right Column (8 cols): Profile Editor & Form */}
+        <div className="lg:col-span-8">
+          <form
+            onSubmit={handleSave}
+            className="rounded-3xl border border-slate-800 bg-slate-950/90 p-6 sm:p-8 shadow-2xl backdrop-blur-xl space-y-6"
+          >
+            {/* Header: Title & Status */}
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+              <div>
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Edit2 className="h-4 w-4 text-cyan-400" />
+                  <span>{isCreatingNew ? 'Create New AI Debater Profile' : `Edit Profile: ${formName || 'Untitled'}`}</span>
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Configure personality, model credentials, speech parameters, and stage appearance.
+                </p>
               </div>
-              <div className="relative mt-1.5">
-                <input
-                  type={showAtheistKey ? 'text' : 'password'}
-                  placeholder={atheistConfig?.hasKey ? 'Enter new key to replace stored key...' : 'AIzaSy...'}
-                  value={atheistKeyInput}
-                  onChange={e => setAtheistKeyInput(e.target.value)}
-                  disabled={!isAdmin}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3.5 py-2.5 text-sm font-mono text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
-                />
+
+              <div className="flex items-center gap-3">
+                {/* Status Toggle */}
                 <button
                   type="button"
-                  onClick={() => setShowAtheistKey(!showAtheistKey)}
-                  className="absolute right-3 top-2.5 text-slate-400 hover:text-white"
-                  title={showAtheistKey ? 'Hide key' : 'Show key'}
+                  onClick={() => setFormStatus(formStatus === 'enabled' ? 'disabled' : 'enabled')}
+                  className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
+                    formStatus === 'enabled'
+                      ? 'bg-emerald-950 border border-emerald-500/40 text-emerald-300'
+                      : 'bg-slate-800 border border-slate-700 text-slate-400'
+                  }`}
                 >
-                  {showAtheistKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  <Power className="h-3.5 w-3.5" />
+                  <span>{formStatus === 'enabled' ? 'Profile Enabled' : 'Profile Disabled'}</span>
                 </button>
-              </div>
-            </div>
 
-            {/* Text Generation Model */}
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                <Cpu className="h-3.5 w-3.5 text-cyan-400" />
-                <span>Text Generation Model ID</span>
-              </label>
-              <select
-                value={atheistModel}
-                onChange={e => setAtheistModel(e.target.value)}
-                disabled={!isAdmin}
-                className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3.5 py-2.5 text-sm text-white focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 disabled:opacity-60"
-              >
-                {AVAILABLE_TEXT_MODELS.map(m => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Search Grounding & Thinking Level */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-300 flex items-center gap-1">
-                    <Search className="h-3 w-3 text-cyan-400" />
-                    <span>Search Grounding</span>
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={atheistSearch}
-                    onChange={e => setAtheistSearch(e.target.checked)}
-                    disabled={!isAdmin}
-                    className="h-4 w-4 rounded accent-cyan-500"
-                  />
-                </div>
-                <p className="mt-1 text-[11px] text-slate-400">Uses Google Search tool for current empirical facts</p>
-              </div>
-
-              <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
-                <span className="text-xs font-semibold text-slate-300 flex items-center gap-1">
-                  <BrainCircuit className="h-3 w-3 text-cyan-400" />
-                  <span>Thinking Level</span>
-                </span>
-                <select
-                  value={atheistThinking}
-                  onChange={e => setAtheistThinking(e.target.value as any)}
-                  disabled={!isAdmin}
-                  className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-white"
-                >
-                  <option value="HIGH">HIGH (Deep Reasoning)</option>
-                  <option value="MEDIUM">MEDIUM (Balanced)</option>
-                  <option value="LOW">LOW (Fast)</option>
-                  <option value="MINIMAL">MINIMAL</option>
-                </select>
-              </div>
-            </div>
-
-            {/* TTS Voice Configuration Subsection */}
-            <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/20 p-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-cyan-300">
-                  <Volume2 className="h-4 w-4 text-cyan-400" />
-                  <span>Speech Synthesis (TTS)</span>
-                </div>
-                <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-                  <span>TTS Enabled</span>
-                  <input
-                    type="checkbox"
-                    checked={atheistTtsEnabled}
-                    onChange={e => setAtheistTtsEnabled(e.target.checked)}
-                    disabled={!isAdmin}
-                    className="h-4 w-4 rounded accent-cyan-500"
-                  />
-                </label>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-400">TTS Model ID</label>
-                  <select
-                    value={atheistTtsModel}
-                    onChange={e => setAtheistTtsModel(e.target.value)}
-                    disabled={!isAdmin}
-                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white"
+                {/* Delete Button (only if editing existing) */}
+                {!isCreatingNew && selectedProfile && (
+                  <button
+                    type="button"
+                    onClick={() => setProfileToDelete(selectedProfile)}
+                    className="flex items-center gap-1 rounded-xl border border-rose-900/50 bg-rose-950/30 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-900/50 transition"
                   >
-                    {AVAILABLE_TTS_MODELS.map(t => (
-                      <option key={t.id} value={t.id}>
-                        {t.id}
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Delete</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Success / Error Messages */}
+            {saveSuccessMsg && (
+              <div className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-950/50 p-3 text-xs text-emerald-200">
+                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                <span>{saveSuccessMsg}</span>
+              </div>
+            )}
+            {saveErrorMsg && (
+              <div className="flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-950/50 p-3 text-xs text-rose-200">
+                <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
+                <span>{saveErrorMsg}</span>
+              </div>
+            )}
+
+            {/* Section 1: Identity & Assigned Position */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-cyan-400">
+                <User className="h-4 w-4" />
+                <span>1. Debater Identity &amp; Position</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">
+                    Display Name <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. AI Alpha, Solar Energy Researcher, Kantian Scholar"
+                    value={formName}
+                    onChange={e => setFormName(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">
+                    Topic Scope
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. All Topics, Energy & Climate, Bioethics"
+                    value={formTopicScope}
+                    onChange={e => setFormTopicScope(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300">
+                  Debate Side / Position To Defend <span className="text-rose-400">*</span>
+                </label>
+                <textarea
+                  rows={2}
+                  required
+                  placeholder="e.g. Supports nuclear energy as essential for low-carbon grid stability..."
+                  value={formPosition}
+                  onChange={e => setFormPosition(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300">
+                  Persona &amp; Dialectical Style Description
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="Define expertise, oratorical tone, core premises, and guidelines..."
+                  value={formPersona}
+                  onChange={e => setFormPersona(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Section 2: Gemini API & Model Configuration */}
+            <div className="border-t border-slate-800 pt-5 space-y-4">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-cyan-400">
+                <Key className="h-4 w-4" />
+                <span>2. Gemini API Credential &amp; Model Configuration</span>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-slate-300">
+                    Dedicated Gemini API Key (Encrypted At Rest)
+                  </label>
+                  {selectedProfile?.hasKey && (
+                    <span className="text-[11px] font-mono text-emerald-400 flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" />
+                      <span>Configured ({selectedProfile.keyMask}) via {selectedProfile.keySource}</span>
+                    </span>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <input
+                    type={showApiKey ? 'text' : 'password'}
+                    placeholder={selectedProfile?.hasKey ? 'Enter new key to update, or leave blank to keep existing' : 'Paste Gemini API key (AIzaSy...)'}
+                    value={rawApiKeyInput}
+                    onChange={e => setRawApiKeyInput(e.target.value)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3.5 py-2 pr-10 text-sm text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none font-mono text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-white"
+                  >
+                    {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Stored securely with AES-256-GCM encryption. Never sent plaintext to browsers.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">
+                    Text Generation Model
+                  </label>
+                  <select
+                    value={formModelId}
+                    onChange={e => setFormModelId(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white focus:border-cyan-500 focus:outline-none"
+                  >
+                    {AVAILABLE_TEXT_MODELS.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
                       </option>
                     ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-400">Assigned Voice</label>
+                  <label className="text-xs font-semibold text-slate-300">
+                    Deep Thinking Level
+                  </label>
                   <select
-                    value={atheistVoice}
-                    onChange={e => setAtheistVoice(e.target.value)}
-                    disabled={!isAdmin}
-                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white font-mono"
+                    value={formThinkingLevel}
+                    onChange={e => setFormThinkingLevel(e.target.value as any)}
+                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white focus:border-cyan-500 focus:outline-none"
+                  >
+                    <option value="HIGH">HIGH (Deep multi-step reasoning)</option>
+                    <option value="MEDIUM">MEDIUM (Balanced speed &amp; depth)</option>
+                    <option value="LOW">LOW (Fast response)</option>
+                    <option value="MINIMAL">MINIMAL</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formSearchGrounding}
+                    onChange={e => setFormSearchGrounding(e.target.checked)}
+                    className="rounded border-slate-700 text-cyan-500 focus:ring-0"
+                  />
+                  <span>Enable Google Search Grounding for empirical fact-checking</span>
+                </label>
+
+                {/* Test Connection Button */}
+                <button
+                  type="button"
+                  onClick={handleTestModel}
+                  disabled={testingModel}
+                  className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-slate-800 transition"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span>{testingModel ? 'Testing Connection...' : 'Test Gemini Model'}</span>
+                </button>
+              </div>
+
+              {modelTestResult && (
+                <div
+                  className={`rounded-xl border p-3 text-xs ${
+                    modelTestResult.success
+                      ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-200'
+                      : 'border-rose-500/40 bg-rose-950/40 text-rose-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {modelTestResult.success ? (
+                      <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                    ) : (
+                      <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
+                    )}
+                    <span>{modelTestResult.message}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Section 3: Voice & Speech Synthesis */}
+            <div className="border-t border-slate-800 pt-5 space-y-4">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-cyan-400">
+                <Volume2 className="h-4 w-4" />
+                <span>3. Voice &amp; TTS Synthesis Configuration</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">
+                    Gemini TTS Model
+                  </label>
+                  <select
+                    value={formTtsModelId}
+                    onChange={e => setFormTtsModelId(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white focus:border-cyan-500 focus:outline-none"
+                  >
+                    {AVAILABLE_TTS_MODELS.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">
+                    Voice Actor
+                  </label>
+                  <select
+                    value={formVoiceName}
+                    onChange={e => setFormVoiceName(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white focus:border-cyan-500 focus:outline-none"
                   >
                     {AVAILABLE_VOICES.map(v => (
                       <option key={v.id} value={v.id}>
@@ -581,376 +729,215 @@ export const AISettingsView: React.FC<AISettingsProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="text-[11px] font-semibold text-slate-400">Speaking Style Instruction</label>
-                <input
-                  type="text"
-                  value={atheistStyle}
-                  onChange={e => setAtheistStyle(e.target.value)}
-                  disabled={!isAdmin}
-                  placeholder="e.g. Analytical, clear, intellectual"
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white"
-                />
-              </div>
-
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>Playback Speed: {atheistSpeed.toFixed(1)}x</span>
-                <input
-                  type="range"
-                  min="0.8"
-                  max="1.5"
-                  step="0.1"
-                  value={atheistSpeed}
-                  onChange={e => setAtheistSpeed(parseFloat(e.target.value))}
-                  disabled={!isAdmin}
-                  className="w-32 accent-cyan-500"
-                />
-              </div>
-
-              {/* Playable Voice Test Player */}
-              {atheistAudioSampleUrl && (
-                <div className="mt-2 rounded-lg border border-cyan-500/40 bg-slate-900 p-2.5 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <Volume2 className="h-4 w-4 text-cyan-400 animate-pulse" />
-                    <span className="text-xs text-cyan-300 font-medium">Test Audio Sample Ready:</span>
-                  </div>
-                  <audio controls src={atheistAudioSampleUrl} className="h-8 max-w-[220px]" />
-                </div>
-              )}
-            </div>
-
-            {/* Feedback Message */}
-            {atheistFeedback && (
-              <div
-                className={`rounded-xl border p-3 text-xs ${
-                  atheistFeedback.success
-                    ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300'
-                    : 'border-rose-500/40 bg-rose-950/40 text-rose-300'
-                }`}
-              >
-                {atheistFeedback.message}
-              </div>
-            )}
-
-            {/* Actions for Atheist AI */}
-            <div className="flex flex-wrap items-center gap-2.5 pt-2">
-              <button
-                type="button"
-                onClick={() => handleTestConnection('atheist')}
-                disabled={testingAtheist || !isAdmin}
-                className="flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-950/60 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-900/60 transition disabled:opacity-50"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${testingAtheist ? 'animate-spin' : ''}`} />
-                <span>Test Connection</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleTestVoice('atheist')}
-                disabled={testingAtheistVoice || !isAdmin}
-                className="flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-950/60 px-3 py-2 text-xs font-semibold text-indigo-300 hover:bg-indigo-900/60 transition disabled:opacity-50"
-              >
-                <Volume2 className={`h-3.5 w-3.5 ${testingAtheistVoice ? 'animate-pulse' : ''}`} />
-                <span>{testingAtheistVoice ? 'Synthesizing...' : 'Test Voice Audio'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSave('atheist')}
-                disabled={savingAtheist || !isAdmin}
-                className="flex items-center gap-1.5 rounded-lg bg-cyan-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-cyan-950 hover:bg-cyan-500 transition disabled:opacity-50"
-              >
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                <span>{savingAtheist ? 'Saving...' : 'Save Configuration'}</span>
-              </button>
-
-              {atheistConfig?.hasKey && (
-                <button
-                  type="button"
-                  onClick={() => handleRemoveKey('atheist')}
-                  disabled={!isAdmin}
-                  title="Remove stored key"
-                  className="ml-auto rounded-lg border border-slate-700 bg-slate-900 p-2 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 transition disabled:opacity-50"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* ========================================================== */}
-        {/* PANEL B: BELIEVER AI                                       */}
-        {/* ========================================================== */}
-        <div className="relative rounded-2xl border border-amber-500/30 bg-gradient-to-b from-slate-900 via-slate-900/90 to-slate-950 p-6 shadow-xl shadow-amber-950/20">
-          <div className="flex items-center justify-between border-b border-amber-500/20 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-950 border border-amber-500/40 text-amber-400 font-extrabold text-sm">
-                B
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <span>Believer AI</span>
-                  <span className="text-xs rounded bg-amber-950 px-2 py-0.5 text-amber-400 border border-amber-500/30">
-                    Radiant Gold
-                  </span>
-                </h2>
-                <p className="text-xs text-slate-400">Philosophical, articulate, theistic perspective</p>
-              </div>
-            </div>
-
-            {/* Status indicator */}
-            <div className="flex items-center gap-1.5 text-xs">
-              <span className={`h-2.5 w-2.5 rounded-full ${believerConfig?.hasKey ? 'bg-amber-400' : 'bg-rose-500'}`} />
-              <span className="font-medium text-slate-300 capitalize">
-                {believerConfig?.hasKey ? believerConfig.status : 'Not Configured'}
-              </span>
-            </div>
-          </div>
-
-          <div className="mt-6 space-y-5">
-            {/* Gemini API Key */}
-            <div>
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                  <Key className="h-3.5 w-3.5 text-amber-400" />
-                  <span>Gemini API Key</span>
-                </label>
-                {believerConfig?.hasKey && (
-                  <span className="text-[11px] text-amber-400">
-                    Active: <code className="font-mono">{believerConfig.keyMask}</code> ({believerConfig.keySource})
-                  </span>
-                )}
-              </div>
-              <div className="relative mt-1.5">
-                <input
-                  type={showBelieverKey ? 'text' : 'password'}
-                  placeholder={believerConfig?.hasKey ? 'Enter new key to replace stored key...' : 'AIzaSy...'}
-                  value={believerKeyInput}
-                  onChange={e => setBelieverKeyInput(e.target.value)}
-                  disabled={!isAdmin}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3.5 py-2.5 text-sm font-mono text-white placeholder-slate-500 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 disabled:opacity-60"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowBelieverKey(!showBelieverKey)}
-                  className="absolute right-3 top-2.5 text-slate-400 hover:text-white"
-                  title={showBelieverKey ? 'Hide key' : 'Show key'}
-                >
-                  {showBelieverKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-
-            {/* Text Generation Model */}
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                <Cpu className="h-3.5 w-3.5 text-amber-400" />
-                <span>Text Generation Model ID</span>
-              </label>
-              <select
-                value={believerModel}
-                onChange={e => setBelieverModel(e.target.value)}
-                disabled={!isAdmin}
-                className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3.5 py-2.5 text-sm text-white focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 disabled:opacity-60"
-              >
-                {AVAILABLE_TEXT_MODELS.map(m => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Search Grounding & Thinking Level */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-300 flex items-center gap-1">
-                    <Search className="h-3 w-3 text-amber-400" />
-                    <span>Search Grounding</span>
-                  </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300">
+                    Speaking Style Metadata Prompt
+                  </label>
                   <input
-                    type="checkbox"
-                    checked={believerSearch}
-                    onChange={e => setBelieverSearch(e.target.checked)}
-                    disabled={!isAdmin}
-                    className="h-4 w-4 rounded accent-amber-500"
+                    type="text"
+                    placeholder="e.g. Analytical, authoritative, and sharp"
+                    value={formVoiceStyle}
+                    onChange={e => setFormVoiceStyle(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
                   />
                 </div>
-                <p className="mt-1 text-[11px] text-slate-400">Uses Google Search tool for philosophical literature</p>
-              </div>
 
-              <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
-                <span className="text-xs font-semibold text-slate-300 flex items-center gap-1">
-                  <BrainCircuit className="h-3 w-3 text-amber-400" />
-                  <span>Thinking Level</span>
-                </span>
-                <select
-                  value={believerThinking}
-                  onChange={e => setBelieverThinking(e.target.value as any)}
-                  disabled={!isAdmin}
-                  className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-white"
-                >
-                  <option value="HIGH">HIGH (Deep Reasoning)</option>
-                  <option value="MEDIUM">MEDIUM (Balanced)</option>
-                  <option value="LOW">LOW (Fast)</option>
-                  <option value="MINIMAL">MINIMAL</option>
-                </select>
-              </div>
-            </div>
-
-            {/* TTS Voice Configuration Subsection */}
-            <div className="rounded-xl border border-amber-500/20 bg-amber-950/20 p-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-300">
-                  <Volume2 className="h-4 w-4 text-amber-400" />
-                  <span>Speech Synthesis (TTS)</span>
+                <div>
+                  <div className="flex items-center justify-between text-xs text-slate-300 font-semibold">
+                    <span>Voice Playback Speed</span>
+                    <span className="font-mono text-cyan-400">{formVoiceSpeed}x</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.75"
+                    max="1.5"
+                    step="0.05"
+                    value={formVoiceSpeed}
+                    onChange={e => setFormVoiceSpeed(parseFloat(e.target.value))}
+                    className="mt-3 w-full accent-cyan-500"
+                  />
                 </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                 <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-                  <span>TTS Enabled</span>
                   <input
                     type="checkbox"
-                    checked={believerTtsEnabled}
-                    onChange={e => setBelieverTtsEnabled(e.target.checked)}
-                    disabled={!isAdmin}
-                    className="h-4 w-4 rounded accent-amber-500"
+                    checked={formTtsEnabled}
+                    onChange={e => setFormTtsEnabled(e.target.checked)}
+                    className="rounded border-slate-700 text-cyan-500 focus:ring-0"
                   />
+                  <span>Enable 24kHz Studio Audio Synthesis for this profile</span>
                 </label>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-400">TTS Model ID</label>
-                  <select
-                    value={believerTtsModel}
-                    onChange={e => setBelieverTtsModel(e.target.value)}
-                    disabled={!isAdmin}
-                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white"
-                  >
-                    {AVAILABLE_TTS_MODELS.map(t => (
-                      <option key={t.id} value={t.id}>
-                        {t.id}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-400">Assigned Voice</label>
-                  <select
-                    value={believerVoice}
-                    onChange={e => setBelieverVoice(e.target.value)}
-                    disabled={!isAdmin}
-                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white font-mono"
-                  >
-                    {AVAILABLE_VOICES.map(v => (
-                      <option key={v.id} value={v.id}>
-                        {v.id} — {v.desc}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-semibold text-slate-400">Speaking Style Instruction</label>
-                <input
-                  type="text"
-                  value={believerStyle}
-                  onChange={e => setBelieverStyle(e.target.value)}
-                  disabled={!isAdmin}
-                  placeholder="e.g. Philosophical, articulate, resonant"
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white"
-                />
-              </div>
-
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>Playback Speed: {believerSpeed.toFixed(1)}x</span>
-                <input
-                  type="range"
-                  min="0.8"
-                  max="1.5"
-                  step="0.1"
-                  value={believerSpeed}
-                  onChange={e => setBelieverSpeed(parseFloat(e.target.value))}
-                  disabled={!isAdmin}
-                  className="w-32 accent-amber-500"
-                />
-              </div>
-
-              {/* Playable Voice Test Player */}
-              {believerAudioSampleUrl && (
-                <div className="mt-2 rounded-lg border border-amber-500/40 bg-slate-900 p-2.5 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <Volume2 className="h-4 w-4 text-amber-400 animate-pulse" />
-                    <span className="text-xs text-amber-300 font-medium">Test Audio Sample Ready:</span>
-                  </div>
-                  <audio controls src={believerAudioSampleUrl} className="h-8 max-w-[220px]" />
-                </div>
-              )}
-            </div>
-
-            {/* Feedback Message */}
-            {believerFeedback && (
-              <div
-                className={`rounded-xl border p-3 text-xs ${
-                  believerFeedback.success
-                    ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300'
-                    : 'border-rose-500/40 bg-rose-950/40 text-rose-300'
-                }`}
-              >
-                {believerFeedback.message}
-              </div>
-            )}
-
-            {/* Actions for Believer AI */}
-            <div className="flex flex-wrap items-center gap-2.5 pt-2">
-              <button
-                type="button"
-                onClick={() => handleTestConnection('believer')}
-                disabled={testingBeliever || !isAdmin}
-                className="flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-950/60 px-3 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-900/60 transition disabled:opacity-50"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${testingBeliever ? 'animate-spin' : ''}`} />
-                <span>Test Connection</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleTestVoice('believer')}
-                disabled={testingBelieverVoice || !isAdmin}
-                className="flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-950/60 px-3 py-2 text-xs font-semibold text-indigo-300 hover:bg-indigo-900/60 transition disabled:opacity-50"
-              >
-                <Volume2 className={`h-3.5 w-3.5 ${testingBelieverVoice ? 'animate-pulse' : ''}`} />
-                <span>{testingBelieverVoice ? 'Synthesizing...' : 'Test Voice Audio'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSave('believer')}
-                disabled={savingBeliever || !isAdmin}
-                className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-amber-950 hover:bg-amber-500 transition disabled:opacity-50"
-              >
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                <span>{savingBeliever ? 'Saving...' : 'Save Configuration'}</span>
-              </button>
-
-              {believerConfig?.hasKey && (
                 <button
                   type="button"
-                  onClick={() => handleRemoveKey('believer')}
-                  disabled={!isAdmin}
-                  title="Remove stored key"
-                  className="ml-auto rounded-lg border border-slate-700 bg-slate-900 p-2 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 transition disabled:opacity-50"
+                  onClick={handleTestVoice}
+                  disabled={testingVoice}
+                  className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-amber-300 hover:bg-slate-800 transition"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Play className="h-3.5 w-3.5 fill-current" />
+                  <span>{testingVoice ? 'Generating Sample...' : 'Test Voice Audio'}</span>
                 </button>
+              </div>
+
+              {voiceTestResult && (
+                <div
+                  className={`rounded-xl border p-3 text-xs ${
+                    voiceTestResult.success
+                      ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-200'
+                      : 'border-rose-500/40 bg-rose-950/40 text-rose-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      {voiceTestResult.success ? (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                      ) : (
+                        <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
+                      )}
+                      <span>{voiceTestResult.message}</span>
+                    </div>
+
+                    {voiceTestResult.audioUrl && (
+                      <audio controls src={voiceTestResult.audioUrl} className="h-7 w-48" />
+                    )}
+                  </div>
+                </div>
               )}
             </div>
-          </div>
+
+            {/* Section 4: Visual Theme & Avatar */}
+            <div className="border-t border-slate-800 pt-5 space-y-4">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-cyan-400">
+                <Palette className="h-4 w-4" />
+                <span>4. Visual Theme, Accent Lighting &amp; Avatar</span>
+              </div>
+
+              {/* Accent Color Picker */}
+              <div>
+                <label className="text-xs font-semibold text-slate-300 mb-2 block">
+                  Stage Lighting &amp; LED Accent Color:
+                </label>
+                <div className="flex flex-wrap gap-2.5">
+                  {ACCENT_COLORS.map(c => {
+                    const isSelected = formAccentColor === c.id;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setFormAccentColor(c.id)}
+                        className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
+                          isSelected
+                            ? `${c.border} bg-slate-900 text-white ring-2 ring-white/20`
+                            : 'border-slate-800 bg-slate-950 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <span className={`h-3 w-3 rounded-full ${c.bg}`} />
+                        <span>{c.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Avatar Presets & URL */}
+              <div>
+                <label className="text-xs font-semibold text-slate-300 mb-2 block">
+                  Avatar Image URL:
+                </label>
+                <input
+                  type="url"
+                  placeholder="Paste direct image URL (https://...)"
+                  value={formAvatarUrl}
+                  onChange={e => setFormAvatarUrl(e.target.value)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+                />
+
+                <div className="mt-2.5">
+                  <span className="text-[10px] font-bold uppercase text-slate-500">Preset Avatars:</span>
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    {PRESET_AVATARS.map((av, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setFormAvatarUrl(av.url)}
+                        className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/80 px-2 py-1 text-[11px] text-slate-300 hover:border-cyan-500/40 hover:text-white transition"
+                      >
+                        <img src={av.url} alt={av.label} className="h-4 w-4 rounded-full object-cover" />
+                        <span>{av.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Form Action Buttons */}
+            <div className="border-t border-slate-800 pt-5 flex items-center justify-end gap-3">
+              <button
+                type="submit"
+                disabled={saving}
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 px-7 py-3 text-xs font-bold text-white shadow-xl shadow-cyan-950 hover:opacity-90 transition active:scale-95 disabled:opacity-50"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                <span>{saving ? 'Saving Profile...' : isCreatingNew ? 'Create AI Profile' : 'Save Profile Changes'}</span>
+              </button>
+            </div>
+          </form>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {profileToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-950 p-6 shadow-2xl">
+            <div className="flex items-center gap-3 text-rose-400 mb-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-950 border border-rose-800/40">
+                <Trash2 className="h-5 w-5 text-rose-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Delete Debater Profile</h3>
+                <p className="text-xs text-rose-300">Remove configured debater identity</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Are you sure you want to delete profile <strong className="text-white">"{profileToDelete.name}"</strong>?
+            </p>
+
+            <p className="mt-2 text-[11px] text-slate-400">
+              Note: Profiles currently engaged in active running debates cannot be deleted until the debate concludes.
+            </p>
+
+            {deleteError && (
+              <div className="mt-3 rounded-lg border border-rose-500/40 bg-rose-950/60 p-2.5 text-xs text-rose-200">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setProfileToDelete(null)}
+                disabled={deleting}
+                className="rounded-xl border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-900 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteProfile}
+                disabled={deleting}
+                className="rounded-xl bg-rose-600 hover:bg-rose-500 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-rose-950 transition active:scale-95 disabled:opacity-50"
+              >
+                {deleting ? 'Deleting...' : 'Delete Profile'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

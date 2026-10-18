@@ -1,6 +1,6 @@
 import React from 'react';
-import { Shield, Sparkles, Sliders, Plus, Volume2, Lock, Unlock } from 'lucide-react';
-import { AIConfigPublic } from '../types';
+import { Shield, Sliders, Plus, Users, Cpu } from 'lucide-react';
+import { AIConfigPublic, DebaterProfilePublic } from '../types';
 
 interface NavbarProps {
   currentView: 'arena' | 'list' | 'settings';
@@ -9,20 +9,23 @@ interface NavbarProps {
   openAdminModal: () => void;
   isAdmin: boolean;
   onLogoutAdmin: () => void;
-  atheistConfig?: AIConfigPublic;
-  believerConfig?: AIConfigPublic;
+  profiles?: DebaterProfilePublic[];
+  activeDebater1Name?: string;
+  activeDebater2Name?: string;
+  activeDebater1Color?: string;
+  activeDebater2Color?: string;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentView,
   setCurrentView,
   openCreateModal,
-  openAdminModal,
-  isAdmin,
-  onLogoutAdmin,
-  atheistConfig,
-  believerConfig,
+  profiles = [],
+  activeDebater1Name,
+  activeDebater2Name,
 }) => {
+  const enabledCount = profiles.filter(p => p.status === 'enabled').length;
+
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
@@ -46,36 +49,27 @@ export const Navbar: React.FC<NavbarProps> = ({
                   LIVING STONE
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">Atheist AI vs Believer AI • Dual Gemini Voice</p>
+              <p className="text-[11px] text-slate-400">Universal All-Topics AI Discourse • Dual Gemini Voice</p>
             </div>
           </button>
         </div>
 
-        {/* Center Persona Status Badges */}
+        {/* Center Live Debaters or Profile Badge */}
         <div className="hidden lg:flex items-center gap-3 text-xs">
-          {/* Atheist AI Status */}
-          <div className="flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-950/40 px-3 py-1.5">
-            <span className="relative flex h-2 w-2">
-              <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${atheistConfig?.hasKey ? 'bg-cyan-400 animate-ping' : 'bg-rose-400'}`} />
-              <span className={`relative inline-flex h-2 w-2 rounded-full ${atheistConfig?.hasKey ? 'bg-cyan-500' : 'bg-rose-500'}`} />
-            </span>
-            <span className="font-semibold text-cyan-300">Atheist AI:</span>
-            <span className="text-slate-300">{atheistConfig?.hasKey ? atheistConfig.modelId : 'Not Configured'}</span>
-            <span className="text-cyan-400/80 font-mono text-[11px]">({atheistConfig?.voiceName || 'Fenrir'})</span>
-          </div>
-
-          <span className="text-slate-600 font-bold">VS</span>
-
-          {/* Believer AI Status */}
-          <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-950/40 px-3 py-1.5">
-            <span className="relative flex h-2 w-2">
-              <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${believerConfig?.hasKey ? 'bg-amber-400 animate-ping' : 'bg-rose-400'}`} />
-              <span className={`relative inline-flex h-2 w-2 rounded-full ${believerConfig?.hasKey ? 'bg-amber-500' : 'bg-rose-500'}`} />
-            </span>
-            <span className="font-semibold text-amber-300">Believer AI:</span>
-            <span className="text-slate-300">{believerConfig?.hasKey ? believerConfig.modelId : 'Not Configured'}</span>
-            <span className="text-amber-400/80 font-mono text-[11px]">({believerConfig?.voiceName || 'Kore'})</span>
-          </div>
+          {activeDebater1Name && activeDebater2Name ? (
+            <div className="flex items-center gap-2.5 rounded-xl border border-slate-800 bg-slate-900/80 px-3.5 py-1.5 shadow-inner">
+              <span className="font-bold text-cyan-300 truncate max-w-[130px]">{activeDebater1Name}</span>
+              <span className="font-black text-slate-500 text-[10px]">VS</span>
+              <span className="font-bold text-amber-300 truncate max-w-[130px]">{activeDebater2Name}</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-slate-400">
+              <Cpu className="h-3.5 w-3.5 text-cyan-400" />
+              <span>
+                <strong className="text-white">{enabledCount || profiles.length || 4}</strong> Profiles Ready for Debates
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Right Navigation Controls */}
@@ -111,8 +105,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}
           >
             <Sliders className="h-3.5 w-3.5 text-indigo-400" />
-            <span className="hidden sm:inline">AI &amp; Voice Settings</span>
-            <span className="sm:hidden">Settings</span>
+            <span className="hidden sm:inline">AI Debater Profiles</span>
+            <span className="sm:hidden">Profiles</span>
           </button>
 
           <button

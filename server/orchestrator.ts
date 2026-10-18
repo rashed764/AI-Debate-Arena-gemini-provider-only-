@@ -1,7 +1,7 @@
 import type { Response } from 'express';
 import { db } from './db.ts';
 import { generateDebateTurnContent, synthesizeDebateSpeech } from './geminiService.ts';
-import type { Debate, DebateTurn, PersonaType } from './types.ts';
+import type { Debate, DebateTurn, DebaterProfileSnapshot } from './types.ts';
 
 interface SSEClient {
   id: string;
@@ -11,6 +11,7 @@ interface SSEClient {
 class DebateOrchestrator {
   private activeJobs: Map<string, boolean> = new Map();
   private streamClients: Map<string, SSEClient[]> = new Map();
+  private cancelledDebates: Set<string> = new Set();
 
   /**
    * Register an SSE client for real-time updates on a debate.
@@ -43,19 +44,46 @@ class DebateOrchestrator {
     for (const client of list) {
       try {
         client.res.write(payload);
-      } catch (err) {
+      } catch {
         // Client might have abruptly disconnected
       }
     }
   }
 
   /**
-   * Determine the next turn parameters based on current turn count.
+   * Cancel and abort any in-progress debate tasks and disconnect clients.
+   */
+  public cancelDebateJobs(debateId: string): void {
+    this.cancelledDebates.add(debateId);
+    this.activeJobs.delete(debateId);
+
+    const list = this.streamClients.get(debateId);
+    if (list) {
+      for (const client of list) {
+        try {
+          client.res.write(`event: debate_deleted\ndata: ${JSON.stringify({ debateId })}\n\n`);
+          client.res.end();
+        } catch {
+          // ignore
+        }
+      }
+      this.streamClients.delete(debateId);
+    }
+
+    setTimeout(() => {
+      this.cancelledDebates.delete(debateId);
+    }, 10000);
+  }
+
+  /**
+   * Determine the next turn plan based on current turn count and debater profile snapshots.
    */
   public getNextTurnPlan(debate: Debate): {
     roundNumber: number;
     roundName: string;
-    persona: PersonaType;
+    speakerSide: 'debater1' | 'debater2';
+    speaker: DebaterProfileSnapshot;
+    opponent: DebaterProfileSnapshot;
     statementType: 'opening' | 'rebuttal' | 'cross_examination' | 'audience_response' | 'closing';
     speakerName: string;
     audienceQuestion?: string;
@@ -65,23 +93,15 @@ class DebateOrchestrator {
       return null;
     }
 
-    // Default structure:
-    // Turn 0: Atheist Opening (Round 1)
-    // Turn 1: Believer Opening (Round 1)
-    // Turn 2: Atheist Rebuttal (Round 2)
-    // Turn 3: Believer Rebuttal (Round 2)
-    // Turn 4: Atheist Audience / Cross-Exam (Round 3)
-    // Turn 5: Believer Audience / Cross-Exam (Round 3)
-    // Turn 6: Atheist Closing (Round 4)
-    // Turn 7: Believer Closing (Round 4)
+    const isDebater1 = turnIndex % 2 === 0;
+    const speakerSide: 'debater1' | 'debater2' = isDebater1 ? 'debater1' : 'debater2';
+    const speaker = isDebater1 ? debate.debater1 : debate.debater2;
+    const opponent = isDebater1 ? debate.debater2 : debate.debater1;
+    const speakerName = speaker?.name || (isDebater1 ? 'Debater 1' : 'Debater 2');
 
-    const persona: PersonaType = turnIndex % 2 === 0 ? 'atheist' : 'believer';
-    const speakerName = persona === 'atheist' ? 'Atheist AI' : 'Believer AI';
-
-    // Check if there is an approved audience question to address in interactive mode
     let audienceQuestion: string | undefined;
     let statementType: 'opening' | 'rebuttal' | 'cross_examination' | 'audience_response' | 'closing' = 'rebuttal';
-    let roundNumber = Math.floor(turnIndex / 2) + 1;
+    const roundNumber = Math.floor(turnIndex / 2) + 1;
     let roundName = `Round ${roundNumber}`;
 
     if (turnIndex === 0 || turnIndex === 1) {
@@ -91,26 +111,26 @@ class DebateOrchestrator {
       statementType = 'closing';
       roundName = 'Closing Statements';
     } else {
-      // Check if there is a pending audience question
       const pendingQ = debate.questions.find(q => q.status === 'pending');
       if (pendingQ) {
         statementType = 'audience_response';
         roundName = 'Audience Cross-Examination';
         audienceQuestion = pendingQ.questionText;
-        if (persona === 'believer') {
-          // If Believer has also answered, mark answered
+        if (speakerSide === 'debater2') {
           db.updateQuestionStatus(debate.id, pendingQ.id, 'answered');
         }
       } else {
         statementType = turnIndex % 4 < 2 ? 'rebuttal' : 'cross_examination';
-        roundName = statementType === 'rebuttal' ? 'First Rebuttal' : 'Philosophical Inquiries';
+        roundName = statementType === 'rebuttal' ? 'First Rebuttal' : 'Cross-Examination';
       }
     }
 
     return {
       roundNumber,
       roundName,
-      persona,
+      speakerSide,
+      speaker,
+      opponent,
       statementType,
       speakerName,
       audienceQuestion,
@@ -121,6 +141,10 @@ class DebateOrchestrator {
    * Executes a single debate turn.
    */
   public async executeNextTurn(debateId: string): Promise<DebateTurn | null> {
+    if (this.cancelledDebates.has(debateId)) {
+      return null;
+    }
+
     const debate = db.getDebate(debateId);
     if (!debate) throw new Error('Debate not found');
 
@@ -131,7 +155,6 @@ class DebateOrchestrator {
 
     const plan = this.getNextTurnPlan(debate);
     if (!plan) {
-      // Complete debate
       db.updateDebate(debateId, { status: 'completed' });
       this.broadcast(debateId, 'debate_completed', {
         status: 'completed',
@@ -144,14 +167,20 @@ class DebateOrchestrator {
     db.updateDebate(debateId, { status: 'in_progress', errorMessage: undefined });
     this.broadcast(debateId, 'turn_start', {
       turnIndex: debate.messages.length,
-      persona: plan.persona,
+      speakerSide: plan.speakerSide,
       speakerName: plan.speakerName,
       roundName: plan.roundName,
+      accentColor: plan.speaker.accentColor,
     });
 
     try {
+      if (this.cancelledDebates.has(debateId) || !db.getDebate(debateId)) {
+        return null;
+      }
+
       const previousTurns = debate.messages.map(m => ({
         speaker: m.speakerName,
+        side: m.speakerSide,
         persona: m.persona,
         claim: m.mainClaim,
         text: m.rawText,
@@ -162,7 +191,8 @@ class DebateOrchestrator {
 
       // 1. Generate text arguments via Gemini
       const turnContent = await generateDebateTurnContent({
-        persona: plan.persona,
+        speaker: plan.speaker,
+        opponent: plan.opponent,
         topic: debate.topic,
         statementType: plan.statementType,
         roundNumber: plan.roundNumber,
@@ -172,7 +202,11 @@ class DebateOrchestrator {
         language: debate.language,
       });
 
-      const messageId = `msg-${Date.now()}-${plan.persona}`;
+      if (this.cancelledDebates.has(debateId) || !db.getDebate(debateId)) {
+        return null;
+      }
+
+      const messageId = `msg-${Date.now()}-${plan.speakerSide}`;
       const needsAudio = debate.playbackMode === 'text_and_voice' || debate.playbackMode === 'voice_only';
 
       const newMessage: DebateTurn = {
@@ -181,7 +215,9 @@ class DebateOrchestrator {
         turnIndex: debate.messages.length,
         roundNumber: plan.roundNumber,
         roundName: plan.roundName,
-        persona: plan.persona,
+        speakerId: plan.speaker.id,
+        speakerSide: plan.speakerSide,
+        persona: plan.speakerSide,
         speakerName: plan.speakerName,
         statementType: plan.statementType,
         mainClaim: turnContent.main_claim,
@@ -201,7 +237,11 @@ class DebateOrchestrator {
       // 2. Synthesize audio if voice mode is enabled
       if (needsAudio) {
         try {
-          const audioResult = await synthesizeDebateSpeech(plan.persona, newMessage.rawText);
+          const audioResult = await synthesizeDebateSpeech(plan.speaker, newMessage.rawText);
+          if (this.cancelledDebates.has(debateId) || !db.getDebate(debateId)) {
+            return newMessage;
+          }
+
           newMessage.audioUrl = audioResult.audioUrl;
           newMessage.audioDuration = audioResult.durationSeconds;
           newMessage.audioStatus = 'ready';
@@ -223,7 +263,7 @@ class DebateOrchestrator {
           });
         } catch (audioErr: unknown) {
           const msg = audioErr instanceof Error ? audioErr.message : String(audioErr);
-          console.error(`Audio synthesis error for ${plan.persona}:`, msg);
+          console.error(`Audio synthesis error for ${plan.speakerName}:`, msg);
           db.updateMessageAudio(debateId, messageId, {
             audioStatus: 'failed',
             audioError: msg,
@@ -257,8 +297,10 @@ class DebateOrchestrator {
         friendlyMsg = 'Invalid Gemini API key. Please verify your credentials in Settings.';
       }
 
-      db.updateDebate(debateId, { status: 'error', errorMessage: friendlyMsg });
-      this.broadcast(debateId, 'debate_error', { error: friendlyMsg });
+      if (!this.cancelledDebates.has(debateId) && db.getDebate(debateId)) {
+        db.updateDebate(debateId, { status: 'error', errorMessage: friendlyMsg });
+        this.broadcast(debateId, 'debate_error', { error: friendlyMsg });
+      }
       throw new Error(friendlyMsg);
     } finally {
       this.activeJobs.delete(debateId);
@@ -279,11 +321,12 @@ class DebateOrchestrator {
     this.activeJobs.set(debateId, true);
 
     try {
-      // Phase A: Generate complete transcript first without audio
       db.updateDebate(debateId, { status: 'generating_transcript', errorMessage: undefined });
       this.broadcast(debateId, 'transcript_generation_start', { debateId });
 
       while (true) {
+        if (this.cancelledDebates.has(debateId)) break;
+
         const currentDebate = db.getDebate(debateId);
         if (!currentDebate || currentDebate.status === 'paused' || currentDebate.status === 'error') {
           break;
@@ -297,13 +340,15 @@ class DebateOrchestrator {
 
         this.broadcast(debateId, 'turn_start', {
           turnIndex: currentDebate.messages.length,
-          persona: plan.persona,
+          speakerSide: plan.speakerSide,
           speakerName: plan.speakerName,
           roundName: plan.roundName,
+          accentColor: plan.speaker.accentColor,
         });
 
         const previousTurns = currentDebate.messages.map(m => ({
           speaker: m.speakerName,
+          side: m.speakerSide,
           persona: m.persona,
           claim: m.mainClaim,
           text: m.rawText,
@@ -313,7 +358,8 @@ class DebateOrchestrator {
         }));
 
         const turnContent = await generateDebateTurnContent({
-          persona: plan.persona,
+          speaker: plan.speaker,
+          opponent: plan.opponent,
           topic: currentDebate.topic,
           statementType: plan.statementType,
           roundNumber: plan.roundNumber,
@@ -323,14 +369,20 @@ class DebateOrchestrator {
           language: currentDebate.language,
         });
 
-        const messageId = `msg-${Date.now()}-${plan.persona}`;
+        if (this.cancelledDebates.has(debateId) || !db.getDebate(debateId)) {
+          break;
+        }
+
+        const messageId = `msg-${Date.now()}-${plan.speakerSide}`;
         const newMessage: DebateTurn = {
           id: messageId,
           debateId,
           turnIndex: currentDebate.messages.length,
           roundNumber: plan.roundNumber,
           roundName: plan.roundName,
-          persona: plan.persona,
+          speakerId: plan.speaker.id,
+          speakerSide: plan.speakerSide,
+          persona: plan.speakerSide,
           speakerName: plan.speakerName,
           statementType: plan.statementType,
           mainClaim: turnContent.main_claim,
@@ -347,16 +399,20 @@ class DebateOrchestrator {
         db.addMessage(debateId, newMessage);
         this.broadcast(debateId, 'message_created', newMessage);
 
-        // Short pause between text generation for smooth SSE flow
-        await new Promise(resolve => setTimeout(resolve, 400));
+        await new Promise(resolve => setTimeout(resolve, 350));
       }
+
+      if (this.cancelledDebates.has(debateId)) return;
 
       const finalizedDebate = db.getDebate(debateId);
       if (!finalizedDebate) return;
 
       if (finalizedDebate.playbackMode === 'text_only') {
         db.updateDebate(debateId, { status: 'completed' });
-        this.broadcast(debateId, 'debate_completed', { status: 'completed', totalMessages: finalizedDebate.messages.length });
+        this.broadcast(debateId, 'debate_completed', {
+          status: 'completed',
+          totalMessages: finalizedDebate.messages.length,
+        });
         return;
       }
 
@@ -366,11 +422,17 @@ class DebateOrchestrator {
 
       let completedCount = 0;
       for (const msg of finalizedDebate.messages) {
+        if (this.cancelledDebates.has(debateId) || !db.getDebate(debateId)) break;
+
         try {
           db.updateMessageAudio(debateId, msg.id, { audioStatus: 'generating' });
           this.broadcast(debateId, 'audio_generating', { messageId: msg.id });
 
-          const audioResult = await synthesizeDebateSpeech(msg.persona, msg.rawText);
+          const speaker = msg.speakerSide === 'debater1' ? finalizedDebate.debater1 : finalizedDebate.debater2;
+          const audioResult = await synthesizeDebateSpeech(speaker, msg.rawText);
+
+          if (this.cancelledDebates.has(debateId) || !db.getDebate(debateId)) break;
+
           db.updateMessageAudio(debateId, msg.id, {
             audioUrl: audioResult.audioUrl,
             audioDuration: audioResult.durationSeconds,
@@ -406,13 +468,16 @@ class DebateOrchestrator {
         }
       }
 
-      // Phase C: Audio Ready / Completed
+      if (this.cancelledDebates.has(debateId) || !db.getDebate(debateId)) return;
+
       db.updateDebate(debateId, { status: 'audio_ready' });
       this.broadcast(debateId, 'audio_ready_all', { status: 'audio_ready' });
 
       db.updateDebate(debateId, { status: 'completed' });
-      this.broadcast(debateId, 'debate_completed', { status: 'completed', totalMessages: finalizedDebate.messages.length });
-
+      this.broadcast(debateId, 'debate_completed', {
+        status: 'completed',
+        totalMessages: finalizedDebate.messages.length,
+      });
     } catch (err: unknown) {
       const rawMsg = err instanceof Error ? err.message : String(err);
       console.error(`Debate generation error on debate ${debateId}:`, rawMsg);
@@ -424,8 +489,10 @@ class DebateOrchestrator {
         friendlyMsg = 'Invalid Gemini API key. Please verify your credentials in Settings.';
       }
 
-      db.updateDebate(debateId, { status: 'error', errorMessage: friendlyMsg });
-      this.broadcast(debateId, 'debate_error', { error: friendlyMsg });
+      if (!this.cancelledDebates.has(debateId) && db.getDebate(debateId)) {
+        db.updateDebate(debateId, { status: 'error', errorMessage: friendlyMsg });
+        this.broadcast(debateId, 'debate_error', { error: friendlyMsg });
+      }
     } finally {
       this.activeJobs.delete(debateId);
     }
@@ -439,7 +506,6 @@ class DebateOrchestrator {
   public resumeDebate(debateId: string): void {
     db.updateDebate(debateId, { status: 'in_progress' });
     this.broadcast(debateId, 'debate_resumed', { status: 'in_progress' });
-    // Resume automatic progression in background if automatic mode
     const debate = db.getDebate(debateId);
     if (debate && debate.mode === 'automatic') {
       this.runFullAutomatic(debateId).catch(err => console.error('Resume error:', err));
@@ -447,6 +513,7 @@ class DebateOrchestrator {
   }
 
   public stopDebate(debateId: string): void {
+    this.activeJobs.delete(debateId);
     db.updateDebate(debateId, { status: 'completed' });
     this.broadcast(debateId, 'debate_stopped', { status: 'completed' });
   }

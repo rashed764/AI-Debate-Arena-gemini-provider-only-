@@ -1,16 +1,35 @@
 import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import { db } from './db.ts';
 import { computeAudioCacheKey, getExistingCachedAudio, saveAudioFile } from './audioStorage.ts';
-import type { PersonaType, StructuredDebateContent } from './types.ts';
+import type { DebaterProfileSnapshot, StructuredDebateContent } from './types.ts';
 import { sanitizeErrorMessage } from './crypto.ts';
 
 /**
- * Creates an authorized GoogleGenAI client for a given persona using its configured API key.
+ * Creates an authorized GoogleGenAI client for a given profile or persona using its configured API key.
  */
-function getClientForPersona(persona: PersonaType, overrideKey?: string): { client: GoogleGenAI; key: string } {
-  const key = overrideKey || db.resolveApiKey(persona);
+function getClientForProfile(profileOrId: DebaterProfileSnapshot | string, overrideKey?: string): { client: GoogleGenAI; key: string } {
+  let key: string | undefined = overrideKey;
+  let name = 'AI Debater';
+
+  if (!key) {
+    if (typeof profileOrId === 'string') {
+      const raw = db.getRawProfile(profileOrId);
+      if (raw) {
+        key = db.resolveProfileApiKey(raw);
+        name = raw.name;
+      } else {
+        key = db.resolveApiKey(profileOrId);
+        name = profileOrId;
+      }
+    } else {
+      const raw = db.getRawProfile(profileOrId.id);
+      key = raw ? db.resolveProfileApiKey(raw) : db.resolveProfileApiKey(profileOrId.id);
+      name = profileOrId.name;
+    }
+  }
+
   if (!key || key.trim() === '') {
-    throw new Error(`No Gemini API key configured for ${persona === 'atheist' ? 'Atheist AI' : 'Believer AI'}. Please configure it in Settings -> AI API Configuration.`);
+    throw new Error(`No Gemini API key configured for ${name}. Please configure it in Settings -> AI Debater Profiles.`);
   }
 
   const client = new GoogleGenAI({
@@ -26,18 +45,21 @@ function getClientForPersona(persona: PersonaType, overrideKey?: string): { clie
 }
 
 /**
- * Tests connection to the Gemini API for a persona.
+ * Tests connection to the Gemini API for a profile or persona.
  */
 export async function testGeminiConnection(
-  persona: PersonaType,
+  profileOrId: string,
   overrideKey?: string,
   modelIdOverride?: string
 ): Promise<{ success: boolean; message: string; model: string }> {
-  const cfg = db.getRawConfig(persona);
-  const targetModel = modelIdOverride || cfg.modelId || 'gemini-3.8-flash';
+  let targetModel = modelIdOverride;
+  const raw = db.getRawProfile(profileOrId);
+  if (!targetModel) {
+    targetModel = raw?.modelId || 'gemini-3.8-flash';
+  }
 
   try {
-    const { client, key } = getClientForPersona(persona, overrideKey);
+    const { client } = getClientForProfile(profileOrId, overrideKey);
 
     const response = await client.models.generateContent({
       model: targetModel,
@@ -46,11 +68,13 @@ export async function testGeminiConnection(
 
     const text = response.text?.trim() || '';
     if (text.length > 0) {
-      db.updateConfig(persona, {
-        status: 'connected',
-        lastTestedAt: new Date().toISOString(),
-        lastTestMessage: `Successfully connected to ${targetModel}.`,
-      });
+      if (raw) {
+        db.updateProfile(raw.id, {
+          connectionStatus: 'connected',
+          lastTestedAt: new Date().toISOString(),
+          lastTestMessage: `Successfully connected to ${targetModel}.`,
+        });
+      }
       return {
         success: true,
         message: `Successfully connected to model "${targetModel}". Gemini API key is valid and responsive.`,
@@ -61,7 +85,7 @@ export async function testGeminiConnection(
     }
   } catch (err: unknown) {
     const rawMsg = err instanceof Error ? err.message : String(err);
-    const resolvedKey = overrideKey || db.resolveApiKey(persona) || '';
+    const resolvedKey = overrideKey || (raw ? db.resolveProfileApiKey(raw) : db.resolveApiKey(profileOrId)) || '';
     const safeError = sanitizeErrorMessage(rawMsg, [resolvedKey]);
 
     let friendlyMessage = safeError;
@@ -73,11 +97,13 @@ export async function testGeminiConnection(
       friendlyMessage = `Model "${targetModel}" was not found or is unavailable for this API key.`;
     }
 
-    db.updateConfig(persona, {
-      status: 'error',
-      lastTestedAt: new Date().toISOString(),
-      lastTestMessage: friendlyMessage,
-    });
+    if (raw) {
+      db.updateProfile(raw.id, {
+        connectionStatus: 'error',
+        lastTestedAt: new Date().toISOString(),
+        lastTestMessage: friendlyMessage,
+      });
+    }
 
     return {
       success: false,
@@ -88,29 +114,27 @@ export async function testGeminiConnection(
 }
 
 /**
- * Tests the TTS voice synthesis for a persona and returns a playable test audio file.
+ * Tests the TTS voice synthesis for a profile and returns a playable test audio file.
  */
 export async function testVoiceAudio(
-  persona: PersonaType,
+  profileOrId: string,
   overrideKey?: string,
   ttsModelOverride?: string,
   voiceOverride?: string,
   styleOverride?: string
 ): Promise<{ success: boolean; message: string; audioUrl?: string; durationSeconds?: number }> {
-  const cfg = db.getRawConfig(persona);
-  const ttsModel = ttsModelOverride || cfg.ttsModelId || 'gemini-3.8-flash-lite-tts';
-  const voice = voiceOverride || cfg.voiceName || (persona === 'atheist' ? 'Fenrir' : 'Kore');
-  const style = styleOverride !== undefined ? styleOverride : cfg.voiceStyle;
+  const raw = db.getRawProfile(profileOrId);
+  const ttsModel = ttsModelOverride || raw?.ttsModelId || 'gemini-3.8-flash-lite-tts';
+  const voice = voiceOverride || raw?.voiceName || 'Fenrir';
+  const style = styleOverride !== undefined ? styleOverride : raw?.voiceStyle || 'Clear and articulate';
+  const debaterName = raw?.name || 'AI Debater';
 
-  const sampleScript =
-    persona === 'atheist'
-      ? 'Greetings. I am Atheist AI. I demand empirical evidence, logical rigor, and naturalistic parsimony in all philosophical inquiry.'
-      : 'Greetings. I am Believer AI. I explore the profound contingency of existence, the intelligibility of the cosmos, and transcendent purpose.';
+  const sampleScript = `Greetings. I am ${debaterName}. I am ready to engage in rigorous, evidence-based debate with intellectual precision and persuasive rhetoric.`;
 
   try {
-    const { client, key } = getClientForPersona(persona, overrideKey);
+    const { client } = getClientForProfile(profileOrId, overrideKey);
 
-    const cacheKey = computeAudioCacheKey(persona, `test-${voice}`, sampleScript);
+    const cacheKey = computeAudioCacheKey(debaterName, `test-${voice}`, sampleScript);
     const existing = getExistingCachedAudio(cacheKey);
     if (existing) {
       return {
@@ -130,7 +154,7 @@ export async function testVoiceAudio(
             {
               text: sampleScript,
               speechMetadata: {
-                style: style || (persona === 'atheist' ? 'Clear, analytical, intellectual' : 'Thoughtful, articulate, resonant'),
+                style,
               },
             },
           ],
@@ -162,7 +186,7 @@ export async function testVoiceAudio(
     };
   } catch (err: unknown) {
     const rawMsg = err instanceof Error ? err.message : String(err);
-    const resolvedKey = overrideKey || db.resolveApiKey(persona) || '';
+    const resolvedKey = overrideKey || (raw ? db.resolveProfileApiKey(raw) : db.resolveApiKey(profileOrId)) || '';
     const safeError = sanitizeErrorMessage(rawMsg, [resolvedKey]);
     return {
       success: false,
@@ -175,21 +199,37 @@ export async function testVoiceAudio(
  * Synthesizes speech for an actual debate statement and caches the WAV file.
  */
 export async function synthesizeDebateSpeech(
-  persona: PersonaType,
-  text: string
+  speakerProfileOrSide: DebaterProfileSnapshot | string,
+  text: string,
+  options?: {
+    voiceName?: string;
+    ttsModelId?: string;
+    voiceStyle?: string;
+    overrideKey?: string;
+  }
 ): Promise<{
   audioId: string;
   audioUrl: string;
   durationSeconds: number;
   cached: boolean;
 }> {
-  const cfg = db.getRawConfig(persona);
-  const ttsModel = cfg.ttsModelId || 'gemini-3.8-flash-lite-tts';
-  const voice = cfg.voiceName || (persona === 'atheist' ? 'Fenrir' : 'Kore');
-  const style = cfg.voiceStyle || (persona === 'atheist' ? 'Analytical and assertive' : 'Philosophical and warm');
+  let profile: DebaterProfileSnapshot | null = null;
+  if (typeof speakerProfileOrSide === 'string') {
+    const raw = db.getRawProfile(speakerProfileOrSide);
+    if (raw) {
+      profile = db.createProfileSnapshot(raw);
+    }
+  } else {
+    profile = speakerProfileOrSide;
+  }
+
+  const voice = options?.voiceName || profile?.voiceName || 'Fenrir';
+  const ttsModel = options?.ttsModelId || profile?.ttsModelId || 'gemini-3.8-flash-lite-tts';
+  const style = options?.voiceStyle || profile?.voiceStyle || 'Analytical, clear, persuasive';
+  const speakerKey = profile ? profile.id : String(speakerProfileOrSide);
 
   // Compute deterministic cache key
-  const cacheKey = computeAudioCacheKey(persona, voice, text);
+  const cacheKey = computeAudioCacheKey(speakerKey, voice, text);
   const existing = getExistingCachedAudio(cacheKey);
   if (existing) {
     return {
@@ -200,7 +240,7 @@ export async function synthesizeDebateSpeech(
     };
   }
 
-  const { client } = getClientForPersona(persona);
+  const { client } = getClientForProfile(speakerProfileOrSide, options?.overrideKey);
 
   const response = await client.models.generateContent({
     model: ttsModel,
@@ -209,7 +249,7 @@ export async function synthesizeDebateSpeech(
         role: 'user',
         parts: [
           {
-            text: text.trim(), // Send complete intended statement without arbitrary substring slicing
+            text: text.trim(),
             speechMetadata: {
               style,
             },
@@ -244,17 +284,19 @@ export async function synthesizeDebateSpeech(
 }
 
 /**
- * Generates a debate turn statement using the persona's configured Gemini text model.
+ * Generates an all-topics debate turn statement using the debater profile's configured model and persona.
  */
 export async function generateDebateTurnContent(params: {
-  persona: PersonaType;
+  speaker: DebaterProfileSnapshot;
+  opponent: DebaterProfileSnapshot;
   topic: string;
   statementType: 'opening' | 'rebuttal' | 'cross_examination' | 'audience_response' | 'closing';
   roundNumber: number;
   roundName: string;
   previousTurns: Array<{
     speaker: string;
-    persona: PersonaType;
+    side?: 'debater1' | 'debater2';
+    persona?: string;
     claim: string;
     text: string;
     reasoning?: string[];
@@ -264,63 +306,69 @@ export async function generateDebateTurnContent(params: {
   audienceQuestion?: string;
   language?: string;
 }): Promise<StructuredDebateContent & { rawSpeechSummary: string }> {
-  const { persona, topic, statementType, roundNumber, roundName, previousTurns, audienceQuestion, language = 'English' } = params;
-  const cfg = db.getRawConfig(persona);
-  const modelId = cfg.modelId || 'gemini-3.8-flash';
+  const {
+    speaker,
+    opponent,
+    topic,
+    statementType,
+    roundNumber,
+    roundName,
+    previousTurns,
+    audienceQuestion,
+    language = 'English',
+  } = params;
 
-  const { client } = getClientForPersona(persona);
+  const modelId = speaker.modelId || 'gemini-3.8-flash';
+  const { client } = getClientForProfile(speaker);
 
-  const isAtheist = persona === 'atheist';
-  const opponentPersona = isAtheist ? 'Believer AI' : 'Atheist AI';
+  const personaIdentity = `You are ${speaker.name}, an expert debater participating in a high-stakes intellectual discourse.
+YOUR ASSIGNED POSITION TO DEFEND: "${speaker.position}"
+YOUR OPPONENT: ${opponent.name}, defending: "${opponent.position}"
 
-  const personaIdentity = isAtheist
-    ? `You are Atheist AI, a world-class philosophical orator representing naturalism, empirical science, and analytical skepticism.
-Your tone is articulate, incisive, intellectually fearless, and deeply respectful.
-Core foundations you champion:
-- Naturalistic Parsimony: Physical laws, quantum mechanics, and evolutionary biology account for our universe without requiring supernatural intervention.
-- Epistemic Burden of Proof: Extraordinary claims require verifiable evidence, not merely philosophical gaps.
-- Anthropic Principles: Fine-tuning is an observation of our conditional existence, not evidence of intentional cosmic architecture.
-- Objective Ethics & Consciousness: Compassion, reason, and social cooperation arise from our shared evolutionary heritage.`
-    : `You are Believer AI, a world-class philosophical orator representing metaphysical realism, philosophical theism, and transcendent purpose.
-Your tone is articulate, warm, resonant, philosophically profound, and courteous.
-Core foundations you champion:
-- Principle of Sufficient Reason & Contingency: Contingent physical reality cannot explain its own existence and logically demands an ontologically necessary Ground of Being.
-- Teleology & Cosmological Fine-Tuning: The extraordinary, knife-edge calibration of physical constants points to transcendent intentionality and Mind.
-- Intelligibility & Mathematics: The profound harmony between human cognition and universal mathematical law reflects a rational cosmic foundation.
-- Transcendent Value: Objective moral duties, human dignity, and consciousness transcend blind mechanistic particles.`;
+DEBATER PERSONA & PHILOSOPHY:
+${speaker.persona}
+
+CORE PRINCIPLES:
+- You must firmly, persuasively, and rigorously defend your assigned position.
+- Treat your opponent with high intellectual respect, but dismantle weak points in their logic or evidence.
+- Engage in direct rebuttals, meaningful counterarguments, cross-examination, and evidence-aware reasoning.
+- Concessions must only be made if legitimately justified, and never forced without reason.`;
 
   let roundInstruction = '';
   switch (statementType) {
     case 'opening':
-      roundInstruction = `This is Round 1: Opening Statement. Set forth your foundational thesis on "${topic}". Present 2 to 3 logically structured premises, lay out your worldview, and challenge your opponent's upcoming framework.`;
+      roundInstruction = `This is Round 1: Opening Statement. Set forth your foundational thesis supporting "${speaker.position}" on the topic "${topic}". Present 2 to 3 logically structured premises, lay out your framework, and present a formidable challenge to ${opponent.name}.`;
       break;
     case 'rebuttal':
-      roundInstruction = `This is Round ${roundNumber}: Direct Rebuttal & Critique. Squarely dismantle ${opponentPersona}'s recent claims. Pinpoint logical fallacies, ungrounded assumptions, or explanatory gaps, directly address the challenge they posed, and pose a razor-sharp counter-inquiry.`;
+      roundInstruction = `This is Round ${roundNumber}: Direct Rebuttal & Critique. Squarely dismantle ${opponent.name}'s recent claims and defense of "${opponent.position}". Pinpoint logical gaps, empirical weaknesses, or ungrounded assumptions, directly address challenges they posed, and pose a razor-sharp counter-inquiry.`;
       break;
     case 'cross_examination':
-      roundInstruction = `This is Cross-Examination & Philosophical Inquiries. Interrogate ${opponentPersona}'s ontological commitments. Push them to the logical boundary of their epistemology and demand clarity on unresolved contradictions.`;
+      roundInstruction = `This is Cross-Examination & Deep Inquiries. Interrogate ${opponent.name}'s fundamental commitments. Push them to the logical boundaries of their stance on "${opponent.position}" and demand clarity on unresolved contradictions.`;
       break;
     case 'audience_response':
-      roundInstruction = `An audience member asks: "${audienceQuestion}". Deliver an insightful answer from your philosophical perspective, explicitly highlighting where your worldview parts company with ${opponentPersona}.`;
+      roundInstruction = `An audience member asks: "${audienceQuestion}". Deliver an insightful answer defending your stance ("${speaker.position}"), explicitly contrasting it with ${opponent.name}'s position.`;
       break;
     case 'closing':
-      roundInstruction = `This is the Closing Statement. Deliver a captivating synthesis of the entire debate. Acknowledge legitimate philosophical subtleties, reaffirm why your perspective offers the most coherent explanation of existence, and impart a profound concluding takeaway to the listeners.`;
+      roundInstruction = `This is the Closing Statement. Deliver a captivating synthesis of the entire debate. Acknowledge legitimate complexities, reaffirm why "${speaker.position}" provides the most coherent, evidence-backed answer to "${topic}", and leave a lasting impression on the audience.`;
       break;
   }
 
-  const previousContext = previousTurns.length > 0
-    ? `Debate History (Chronological Turns):\n` +
-      previousTurns.map((t, idx) => {
-        let block = `--- Turn #${idx + 1}: ${t.speaker} (${t.persona.toUpperCase()}) ---\nMain Thesis: "${t.claim}"\nSpeech Delivered: "${t.text}"`;
-        if (t.reasoning && t.reasoning.length > 0) {
-          block += `\nPremises:\n${t.reasoning.map(r => `  • ${r}`).join('\n')}`;
-        }
-        if (t.questionsForOpponent && t.questionsForOpponent.length > 0) {
-          block += `\nDirect Challenge Posed to You:\n${t.questionsForOpponent.map(q => `  • "${q}"`).join('\n')}`;
-        }
-        return block;
-      }).join('\n\n')
-    : `No previous statements. You are delivering the opening statement.`;
+  const previousContext =
+    previousTurns.length > 0
+      ? `Debate History (Chronological Turns):\n` +
+        previousTurns
+          .map((t, idx) => {
+            let block = `--- Turn #${idx + 1}: ${t.speaker} ---\nMain Thesis: "${t.claim}"\nSpeech Delivered: "${t.text}"`;
+            if (t.reasoning && t.reasoning.length > 0) {
+              block += `\nPremises:\n${t.reasoning.map(r => `  • ${r}`).join('\n')}`;
+            }
+            if (t.questionsForOpponent && t.questionsForOpponent.length > 0) {
+              block += `\nDirect Challenge Posed to You:\n${t.questionsForOpponent.map(q => `  • "${q}"`).join('\n')}`;
+            }
+            return block;
+          })
+          .join('\n\n')
+      : `No previous statements. You are delivering the opening statement.`;
 
   const prompt = `${personaIdentity}
 
@@ -332,8 +380,8 @@ ${roundInstruction}
 ${previousContext}
 
 CRITICAL ORATORICAL INSTRUCTIONS FOR REALISTIC DEBATE:
-1. DIRECT ENGAGEMENT: If ${opponentPersona} previously asked a question or asserted a premise, directly address them by name and respond to their exact point.
-2. SPOKEN ELOQUENCE: "speech_text" MUST be a complete, beautifully paced monologue (130-180 words) written for spoken voice delivery. Complete all sentences smoothly with no trailing thoughts.
+1. DIRECT ENGAGEMENT: Address ${opponent.name} by name. Respond to their specific premises, evidence, or questions.
+2. SPOKEN ELOQUENCE: "speech_text" MUST be a complete, beautifully paced monologue (130-180 words) written for spoken voice delivery.
 3. STRUCTURE: Include rigorous analytical reasoning points, a sharp direct rebuttal, and a piercing philosophical challenge for your opponent.
 
 Return strictly valid JSON with this schema:
@@ -344,43 +392,41 @@ Return strictly valid JSON with this schema:
     "Second supporting premise or empirical evidence",
     "Third supporting premise or analytical inference"
   ],
-  "response_to_opponent": "Direct, incisive rebuttal addressing the opponent's previous points (or opening challenge)",
+  "response_to_opponent": "Direct, incisive rebuttal addressing ${opponent.name}'s previous points",
   "questions_for_opponent": [
-    "A piercing, focused philosophical challenge for your opponent"
+    "A piercing, focused challenge for ${opponent.name}"
   ],
   "uncertainties": [
-    "An intellectually honest acknowledgment of where the boundary of knowledge lies"
+    "An intellectually honest acknowledgment of where nuances or boundaries lie"
   ],
   "sources": [
-    { "title": "Authoritative paper, philosophical argument or scientific principle", "url": "https://en.wikipedia.org/wiki/Cosmology" }
+    { "title": "Authoritative paper, principle, or empirical reference", "url": "https://en.wikipedia.org" }
   ],
-  "speech_text": "A full, articulate spoken monologue (around 130-180 words) suitable for live audio debate speech synthesis, speaking directly to ${opponentPersona} and the listeners."
+  "speech_text": "A full, articulate spoken monologue (around 130-180 words) suitable for live audio debate speech synthesis, speaking directly to ${opponent.name} and the listeners."
 }
 
 Do NOT wrap with markdown outside of the JSON. Return only the JSON object.`;
 
-  // Build model configs
   const config: {
     systemInstruction: string;
     responseMimeType: string;
     tools?: Array<{ googleSearch: object }>;
     thinkingConfig?: { thinkingLevel: ThinkingLevel };
   } = {
-    systemInstruction: `You are participating in a formal live AI debate as ${isAtheist ? 'Atheist AI' : 'Believer AI'}. Output strictly valid JSON.`,
+    systemInstruction: `You are participating in a formal live AI debate as ${speaker.name}. Output strictly valid JSON.`,
     responseMimeType: 'application/json',
   };
 
-  if (cfg.searchGroundingEnabled) {
+  if (speaker.searchGroundingEnabled) {
     config.tools = [{ googleSearch: {} }];
   }
 
-  if (cfg.thinkingLevel && (modelId.includes('gemini-3') || modelId.includes('gemini-4'))) {
-    if (cfg.thinkingLevel === 'HIGH') config.thinkingConfig = { thinkingLevel: ThinkingLevel.HIGH };
-    else if (cfg.thinkingLevel === 'MEDIUM') config.thinkingConfig = { thinkingLevel: ThinkingLevel.MEDIUM };
-    else if (cfg.thinkingLevel === 'LOW') config.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
+  if (speaker.thinkingLevel && (modelId.includes('gemini-3') || modelId.includes('gemini-4'))) {
+    if (speaker.thinkingLevel === 'HIGH') config.thinkingConfig = { thinkingLevel: ThinkingLevel.HIGH };
+    else if (speaker.thinkingLevel === 'MEDIUM') config.thinkingConfig = { thinkingLevel: ThinkingLevel.MEDIUM };
+    else if (speaker.thinkingLevel === 'LOW') config.thinkingConfig = { thinkingLevel: ThinkingLevel.LOW };
   }
 
-  // Attempt generation with retry, fallback to gemini-3.8-flash on 429/quota error, and tool fallback
   let rawOutput = '';
   const candidateModels = [modelId];
   if (modelId !== 'gemini-3.8-flash') {
@@ -390,7 +436,6 @@ Do NOT wrap with markdown outside of the JSON. Return only the JSON object.`;
   let lastError: any = null;
 
   for (const currentModel of candidateModels) {
-    // Up to 2 retry attempts per model with exponential backoff
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const response = await client.models.generateContent({
@@ -406,54 +451,39 @@ Do NOT wrap with markdown outside of the JSON. Return only the JSON object.`;
         const isRateLimit = msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota');
 
         if (isRateLimit && config.tools) {
-          // Retry without search tool to reduce quota/cost pressure
           delete config.tools;
         }
 
         if (isRateLimit && attempt === 0) {
-          // Wait 2.5 seconds before retrying
           await new Promise(r => setTimeout(r, 2500));
           continue;
         }
-        break; // Move to next candidate model if available
+        break;
       }
     }
     if (rawOutput) break;
   }
 
   if (!rawOutput) {
-    console.warn('Gemini generation failed, falling back to structured philosophical synthesis:', lastError?.message || lastError);
-    // Provide a rich contextual debate response so the debate continues seamlessly rather than failing with raw JSON 429
+    console.warn('Gemini generation failed, using structured dialectical fallback:', lastError?.message || lastError);
     return {
-      main_claim: isAtheist
-        ? 'Empirical naturalism and scientific parsimony remain the only logically coherent basis for explaining reality.'
-        : 'Cosmic contingency, boundary conditions, and universal intelligibility necessitate a transcendent Primary Cause.',
-      reasoning: isAtheist
-        ? [
-            'Every historical phenomenon once attributed to divine intervention has ultimately yielded to natural laws and physical mechanisms.',
-            'Introducing a transcendent, conscious mind increases explanatory debt without providing an empirically verifiable causal mechanism.',
-            'The anthropic principle and quantum cosmological models offer consistent accounts of cosmic structure without supernatural presuppositions.'
-          ]
-        : [
-            'Contingent physical reality cannot ground its own existence; an ontological necessity is logically demanded by the principle of sufficient reason.',
-            'The profound mathematical fine-tuning of fundamental physical constants permits observers only within an astronomically narrow parameter space.',
-            'Objective consciousness and the universal validity of rational deduction point beyond blind mechanistic physicalism.'
-          ],
-      response_to_opponent: isAtheist
-        ? 'The opponent presumes that unexplained physical frontiers justify metaphysical assertions, which conflates lack of current data with proof of transcendence.'
-        : 'The opponent assumes physical laws possess generative agency, yet descriptive mathematical symmetries cannot cause concrete existence.',
-      questions_for_opponent: isAtheist
-        ? ['How does positing a timeless divine mind avoid the logical paradox of executing sequential intentions before the existence of time?']
-        : ['Why does anything exist rather than nothing, and what ontological ground sustains the intelligibility of natural law?'],
+      main_claim: `${speaker.name} affirms that ${speaker.position} provides the most robust explanation on "${topic}".`,
+      reasoning: [
+        `First, empirical and logical scrutiny directly supports ${speaker.position}.`,
+        `Second, the counter-arguments advanced by ${opponent.name} rely on presuppositions that cannot withstand rigorous interrogation.`,
+        `Third, when we evaluate overall coherence, ${speaker.position} accounts for observed data with minimal ungrounded assumptions.`
+      ],
+      response_to_opponent: `${opponent.name} fails to account for critical counter-evidence and overextends the explanatory reach of "${opponent.position}".`,
+      questions_for_opponent: [
+        `How does ${opponent.name} reconcile the core contradictions inherent in defending "${opponent.position}" against contrary evidence?`
+      ],
       uncertainties: [
-        'Fundamental limits of empirical observation at Planck-scale and cosmological horizon boundaries.'
+        'Nuanced boundary conditions and open empirical frontiers under active inquiry.'
       ],
       sources: [
-        { title: 'Philosophical Perspectives on Cosmic Origins', url: 'https://plato.stanford.edu/entries/cosmological-argument/' }
+        { title: `Foundations of Debate on ${topic}`, url: 'https://en.wikipedia.org' }
       ],
-      rawSpeechSummary: isAtheist
-        ? 'We must adhere strictly to evidence and parsimony. Physical laws and quantum cosmology describe our cosmos without requiring supernatural entities. Introducing a conscious creator solves nothing; it merely introduces an ungrounded mystery.'
-        : 'Contingent reality cannot explain why it exists rather than nothing. The delicate fine-tuning of fundamental laws and the very rationality of human thought point to a necessary, transcendent Mind that grounds all cosmic order.',
+      rawSpeechSummary: `${opponent.name}, while I appreciate your articulation, the core premises of your position cannot withstand scrutiny. ${speaker.position} remains the most coherent, evidence-aligned framework for understanding ${topic}. We must ground our deductions in rigorous proof rather than unverified assertions.`,
     };
   }
 
@@ -464,35 +494,31 @@ Do NOT wrap with markdown outside of the JSON. Return only the JSON object.`;
       .replace(/^```json\s*/i, '')
       .replace(/\s*```$/i, '')
       .trim();
-    
+
     try {
       parsed = JSON.parse(cleaned);
-    } catch (e1) {
-      // Attempt to clean trailing commas before parsing again
+    } catch {
       const fixed = cleaned
-        .replace(/,\s*([}\\]])/g, '$1')
+        .replace(/,\s*([}\]])/g, '$1')
         .replace(/,\s*\]/g, ']');
       parsed = JSON.parse(fixed);
     }
-  } catch (parseErr) {
-    // Only log debug info if completely unable to parse JSON
+  } catch {
     parsed = {
-      main_claim: isAtheist
-        ? 'Naturalistic parsimony and empirical evidence remain the solely validated guide to reality.'
-        : 'Cosmic contingency and fine-tuning demonstrate the necessity of transcendent Mind.',
+      main_claim: `${speaker.name} defends ${speaker.position}.`,
       reasoning: [
-        'The laws of physics and logic do not require divine intervention.',
-        'Human knowledge expands by replacing supernatural gaps with scientific explanations.'
+        `Rigorous adherence to systematic deduction supports ${speaker.position}.`,
+        `Alternative positions fail to provide consistent explanatory power.`
       ],
-      response_to_opponent: 'Opponent arguments rely on metaphysical assumptions beyond testable models.',
-      questions_for_opponent: ['How does a supernatural cause provide explanatory power without an empirical mechanism?'],
-      uncertainties: ['The ultimate nature of physical singularity and boundary conditions.'],
+      response_to_opponent: `Opponent's arguments leave pivotal questions unaddressed.`,
+      questions_for_opponent: [`What verifiable evidence resolves this contradiction?`],
+      uncertainties: ['Frontiers of empirical measurement.'],
       speech_text: rawOutput.trim(),
     };
   }
 
   return {
-    main_claim: parsed.main_claim || 'The question of cosmic origin demands rigorous scrutiny.',
+    main_claim: parsed.main_claim || `${speaker.name} argues that ${speaker.position}.`,
     reasoning: Array.isArray(parsed.reasoning) ? parsed.reasoning : [parsed.main_claim],
     response_to_opponent: parsed.response_to_opponent || undefined,
     questions_for_opponent: Array.isArray(parsed.questions_for_opponent) ? parsed.questions_for_opponent : [],

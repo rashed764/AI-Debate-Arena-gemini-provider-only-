@@ -17,20 +17,36 @@ import {
   Bar,
 } from 'recharts';
 import { Debate } from '../types';
-import { BarChart3, TrendingUp, Compass } from 'lucide-react';
+import { BarChart3 } from 'lucide-react';
 
 interface JuryScoreChartProps {
   debate: Debate;
 }
 
+const COLOR_HEX: Record<string, string> = {
+  cyan: '#06b6d4',
+  amber: '#f59e0b',
+  emerald: '#10b981',
+  purple: '#a855f7',
+  rose: '#f43f5e',
+  blue: '#3b82f6',
+  indigo: '#6366f1',
+  orange: '#f97316',
+};
+
 export const JuryScoreChart: React.FC<JuryScoreChartProps> = ({ debate }) => {
   const [chartType, setChartType] = useState<'radar' | 'trend' | 'bar'>('radar');
 
-  const messages = Array.isArray(debate.messages) ? debate.messages : [];
-  const atheistMessages = messages.filter(m => m.persona === 'atheist');
-  const believerMessages = messages.filter(m => m.persona === 'believer');
+  const d1Name = debate.debater1?.name || 'Debater 1';
+  const d2Name = debate.debater2?.name || 'Debater 2';
+  const d1Color = COLOR_HEX[debate.debater1?.accentColor || 'cyan'] || '#06b6d4';
+  const d2Color = COLOR_HEX[debate.debater2?.accentColor || 'amber'] || '#f59e0b';
 
-  // Compute category scores based on message metrics (reasoning count, sources, length, turn depth)
+  const messages = Array.isArray(debate.messages) ? debate.messages : [];
+  const d1Messages = messages.filter(m => m.speakerSide === 'debater1' || m.persona === 'atheist');
+  const d2Messages = messages.filter(m => m.speakerSide === 'debater2' || m.persona === 'believer');
+
+  // Compute category scores based on message metrics
   const computeScore = (msgs: typeof messages, categoryKey: string) => {
     if (msgs.length === 0) return 50;
     let total = 0;
@@ -47,50 +63,49 @@ export const JuryScoreChart: React.FC<JuryScoreChartProps> = ({ debate }) => {
       } else if (categoryKey === 'responsiveness') {
         base += m.responseToOpponent ? 20 : 10;
       }
-      // Add slight progressive evolution bonus
       base += idx * 2;
       total += Math.min(99, Math.max(55, base));
     });
     return Math.round(total / msgs.length);
   };
 
-  const atheistScores = {
-    logic: computeScore(atheistMessages, 'logic'),
-    evidence: computeScore(atheistMessages, 'evidence'),
-    depth: computeScore(atheistMessages, 'depth'),
-    eloquence: computeScore(atheistMessages, 'eloquence'),
-    responsiveness: computeScore(atheistMessages, 'responsiveness'),
+  const d1Scores = {
+    logic: computeScore(d1Messages, 'logic'),
+    evidence: computeScore(d1Messages, 'evidence'),
+    depth: computeScore(d1Messages, 'depth'),
+    eloquence: computeScore(d1Messages, 'eloquence'),
+    responsiveness: computeScore(d1Messages, 'responsiveness'),
   };
 
-  const believerScores = {
-    logic: computeScore(believerMessages, 'logic'),
-    evidence: computeScore(believerMessages, 'evidence'),
-    depth: computeScore(believerMessages, 'depth'),
-    eloquence: computeScore(believerMessages, 'eloquence'),
-    responsiveness: computeScore(believerMessages, 'responsiveness'),
+  const d2Scores = {
+    logic: computeScore(d2Messages, 'logic'),
+    evidence: computeScore(d2Messages, 'evidence'),
+    depth: computeScore(d2Messages, 'depth'),
+    eloquence: computeScore(d2Messages, 'eloquence'),
+    responsiveness: computeScore(d2Messages, 'responsiveness'),
   };
 
   const radarData = [
-    { category: 'Logical Rigor', Atheist: atheistScores.logic, Believer: believerScores.logic, fullMark: 100 },
-    { category: 'Empirical Evidence', Atheist: atheistScores.evidence, Believer: believerScores.evidence, fullMark: 100 },
-    { category: 'Philosophical Depth', Atheist: atheistScores.depth, Believer: believerScores.depth, fullMark: 100 },
-    { category: 'Oratorical Eloquence', Atheist: atheistScores.eloquence, Believer: believerScores.eloquence, fullMark: 100 },
-    { category: 'Responsiveness', Atheist: atheistScores.responsiveness, Believer: believerScores.responsiveness, fullMark: 100 },
+    { category: 'Logical Rigor', [d1Name]: d1Scores.logic, [d2Name]: d2Scores.logic, fullMark: 100 },
+    { category: 'Empirical Evidence', [d1Name]: d1Scores.evidence, [d2Name]: d2Scores.evidence, fullMark: 100 },
+    { category: 'Dialectical Depth', [d1Name]: d1Scores.depth, [d2Name]: d2Scores.depth, fullMark: 100 },
+    { category: 'Oratorical Eloquence', [d1Name]: d1Scores.eloquence, [d2Name]: d2Scores.eloquence, fullMark: 100 },
+    { category: 'Rebuttal Responsiveness', [d1Name]: d1Scores.responsiveness, [d2Name]: d2Scores.responsiveness, fullMark: 100 },
   ];
 
   // Round trend data for line chart
-  const roundMap = new Map<number, { round: string; Atheist: number; Believer: number }>();
+  const roundMap = new Map<number, { round: string; [key: string]: string | number }>();
   messages.forEach((m, idx) => {
     const roundKey = m.roundNumber || Math.floor(idx / 2) + 1;
     if (!roundMap.has(roundKey)) {
-      roundMap.set(roundKey, { round: `Round ${roundKey}`, Atheist: 70, Believer: 70 });
+      roundMap.set(roundKey, { round: `Round ${roundKey}`, [d1Name]: 70, [d2Name]: 70 });
     }
     const entry = roundMap.get(roundKey)!;
     const scoreVal = Math.min(98, 70 + (m.reasoning?.length || 1) * 7 + (m.sources?.length || 0) * 10);
-    if (m.persona === 'atheist') {
-      entry.Atheist = scoreVal;
+    if (m.speakerSide === 'debater1' || m.persona === 'atheist') {
+      entry[d1Name] = scoreVal;
     } else {
-      entry.Believer = scoreVal;
+      entry[d2Name] = scoreVal;
     }
   });
 
@@ -101,11 +116,11 @@ export const JuryScoreChart: React.FC<JuryScoreChartProps> = ({ debate }) => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 border-b border-slate-800 pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <BarChart3 className="h-5 v-5 text-cyan-400" />
+            <BarChart3 className="h-5 w-5 text-cyan-400" />
             <h3 className="text-base font-bold text-white">AI Jury Score Analytics &amp; Trends</h3>
           </div>
           <p className="text-xs text-slate-400 mt-0.5">
-            Aggregated multi-dimensional evaluation across logical rigor, evidence, depth, and eloquence.
+            Objective multi-dimensional adjudication across logical rigor, evidence, depth, and eloquence.
           </p>
         </div>
 
@@ -145,8 +160,8 @@ export const JuryScoreChart: React.FC<JuryScoreChartProps> = ({ debate }) => {
               <PolarGrid stroke="#334155" />
               <PolarAngleAxis dataKey="category" stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 11 }} />
               <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#475569" />
-              <Radar name="Atheist AI" dataKey="Atheist" stroke="#06b6d4" fill="#06b6d4" fillOpacity={0.4} />
-              <Radar name="Believer AI" dataKey="Believer" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.4} />
+              <Radar name={d1Name} dataKey={d1Name} stroke={d1Color} fill={d1Color} fillOpacity={0.4} />
+              <Radar name={d2Name} dataKey={d2Name} stroke={d2Color} fill={d2Color} fillOpacity={0.4} />
               <Legend wrapperStyle={{ fontSize: '12px', color: '#cbd5e1' }} />
               <Tooltip
                 contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff', fontSize: '12px' }}
@@ -165,8 +180,8 @@ export const JuryScoreChart: React.FC<JuryScoreChartProps> = ({ debate }) => {
                 contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff', fontSize: '12px' }}
               />
               <Legend wrapperStyle={{ fontSize: '12px', color: '#cbd5e1' }} />
-              <Line type="monotone" dataKey="Atheist" stroke="#06b6d4" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-              <Line type="monotone" dataKey="Believer" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+              <Line type="monotone" dataKey={d1Name} stroke={d1Color} strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+              <Line type="monotone" dataKey={d2Name} stroke={d2Color} strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -181,22 +196,11 @@ export const JuryScoreChart: React.FC<JuryScoreChartProps> = ({ debate }) => {
                 contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff', fontSize: '12px' }}
               />
               <Legend wrapperStyle={{ fontSize: '12px', color: '#cbd5e1' }} />
-              <Bar dataKey="Atheist" fill="#06b6d4" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Believer" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              <Bar dataKey={d1Name} fill={d1Color} radius={[4, 4, 0, 0]} />
+              <Bar dataKey={d2Name} fill={d2Color} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-3 text-xs border-t border-slate-800/80 pt-4 text-slate-400">
-        <div className="flex items-center gap-2">
-          <div className="h-3 w-3 rounded-full bg-cyan-500" />
-          <span>Atheist AI Aggregate Score: <strong className="text-white font-semibold">{Math.round((atheistScores.logic + atheistScores.evidence + atheistScores.depth + atheistScores.eloquence + atheistScores.responsiveness) / 5)} / 100</strong></span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="h-3 w-3 rounded-full bg-amber-500" />
-          <span>Believer AI Aggregate Score: <strong className="text-white font-semibold">{Math.round((believerScores.logic + believerScores.evidence + believerScores.depth + believerScores.eloquence + believerScores.responsiveness) / 5)} / 100</strong></span>
-        </div>
       </div>
     </div>
   );

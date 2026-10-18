@@ -1,11 +1,62 @@
-export type PersonaType = 'atheist' | 'believer';
+export type PersonaType = string;
+
+export type AccentColor = 'cyan' | 'amber' | 'emerald' | 'purple' | 'rose' | 'blue' | 'indigo' | 'orange';
+
 export type DebateMode = 'automatic' | 'interactive';
 export type PlaybackMode = 'text_only' | 'voice_only' | 'text_and_voice';
 export type DebateStatus = 'idle' | 'generating_transcript' | 'generating_audio' | 'audio_ready' | 'in_progress' | 'paused' | 'completed' | 'error';
 export type AudioGenerationStatus = 'none' | 'generating' | 'ready' | 'failed';
 
+export interface DebaterProfile {
+  id: string;
+  name: string;
+  position: string;
+  topicScope: string;
+  persona: string;
+  modelId: string;
+  ttsModelId: string;
+  voiceName: string;
+  voiceStyle: string;
+  voiceSpeed: number;
+  ttsEnabled: boolean;
+  searchGroundingEnabled: boolean;
+  thinkingLevel: 'HIGH' | 'MEDIUM' | 'LOW' | 'MINIMAL';
+  avatarUrl: string;
+  accentColor: AccentColor;
+  status: 'enabled' | 'disabled';
+  connectionStatus?: 'not_configured' | 'connected' | 'error';
+  lastTestedAt?: string | null;
+  lastTestMessage?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DebaterProfilePublic extends DebaterProfile {
+  hasKey: boolean;
+  keyMask: string;
+  keySource: 'database' | 'environment' | 'none';
+}
+
+export interface DebaterProfileSnapshot {
+  id: string;
+  name: string;
+  position: string;
+  topicScope?: string;
+  persona: string;
+  modelId: string;
+  ttsModelId: string;
+  voiceName: string;
+  voiceStyle: string;
+  voiceSpeed: number;
+  ttsEnabled: boolean;
+  searchGroundingEnabled: boolean;
+  thinkingLevel: 'HIGH' | 'MEDIUM' | 'LOW' | 'MINIMAL';
+  avatarUrl: string;
+  accentColor: AccentColor;
+}
+
 export interface AIConfigPublic {
-  persona: PersonaType;
+  persona: string;
   name: string;
   modelId: string;
   ttsModelId: string;
@@ -31,7 +82,9 @@ export interface DebateTurn {
   turnIndex: number;
   roundNumber: number;
   roundName: string;
-  persona: PersonaType;
+  speakerId: string;
+  speakerSide: 'debater1' | 'debater2';
+  persona: string;
   speakerName: string;
   statementType: 'opening' | 'rebuttal' | 'cross_examination' | 'audience_response' | 'closing';
   mainClaim: string;
@@ -59,8 +112,10 @@ export interface AudienceQuestion {
 }
 
 export interface DebateSummary {
-  atheistStrongPoints: string[];
-  believerStrongPoints: string[];
+  debater1StrongPoints?: string[];
+  debater2StrongPoints?: string[];
+  atheistStrongPoints?: string[];
+  believerStrongPoints?: string[];
   keyClashes: string[];
   verifiedFacts: string[];
   overallAssessment: string;
@@ -79,12 +134,16 @@ export interface Debate {
   totalTurns: number;
   thinkingEnabled: boolean;
   searchEnabled: boolean;
+  debater1: DebaterProfileSnapshot;
+  debater2: DebaterProfileSnapshot;
   messages: DebateTurn[];
   questions: AudienceQuestion[];
   votes: {
-    atheist: number;
-    believer: number;
+    debater1: number;
+    debater2: number;
     total: number;
+    atheist?: number;
+    believer?: number;
   };
   summary?: DebateSummary;
   createdAt: string;
