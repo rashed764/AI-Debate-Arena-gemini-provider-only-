@@ -291,10 +291,10 @@ class DebateOrchestrator {
       console.error(`Debate execution error on debate ${debateId}:`, rawMsg);
 
       let friendlyMsg = rawMsg;
-      if (rawMsg.includes('429') || rawMsg.includes('RESOURCE_EXHAUSTED') || rawMsg.includes('quota')) {
-        friendlyMsg = 'Gemini API quota or rate limit exceeded. Please wait a moment or check your API key in Settings.';
-      } else if (rawMsg.includes('API_KEY_INVALID') || rawMsg.includes('key not valid')) {
-        friendlyMsg = 'Invalid Gemini API key. Please verify your credentials in Settings.';
+      if (rawMsg.includes('429') || rawMsg.includes('RESOURCE_EXHAUSTED') || rawMsg.includes('quota') || rawMsg.includes('rate limit')) {
+        friendlyMsg = 'API quota or rate limit exceeded across all configured keys for this provider. Please add a backup key in Settings.';
+      } else if (rawMsg.includes('API_KEY_INVALID') || rawMsg.includes('key not valid') || rawMsg.includes('unauthorized')) {
+        friendlyMsg = 'Invalid API key. Please verify your provider credentials in Settings.';
       }
 
       if (!this.cancelledDebates.has(debateId) && db.getDebate(debateId)) {

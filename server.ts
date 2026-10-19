@@ -3,7 +3,15 @@ import path from 'node:path';
 import fs from 'node:fs';
 import dotenv from 'dotenv';
 import { db } from './server/db.ts';
-import { testGeminiConnection, testVoiceAudio, synthesizeDebateSpeech } from './server/geminiService.ts';
+import {
+  testGeminiConnection,
+  testProviderConnection,
+  testVoiceAudio,
+  synthesizeDebateSpeech,
+} from './server/geminiService.ts';
+import { PROVIDER_CATALOGS } from './server/providers/catalog.ts';
+import { fetchLiveProviderModels } from './server/providers/providerManager.ts';
+import type { AIProvider } from './server/types.ts';
 import { orchestrator } from './server/orchestrator.ts';
 import { getAudioFilePath } from './server/audioStorage.ts';
 import { getMediaFilePath } from './server/mediaStorage.ts';
@@ -46,6 +54,7 @@ app.get('/api/profiles', (req: Request, res: Response) => {
 app.post('/api/profiles', (req: Request, res: Response) => {
   const {
     name,
+    provider,
     position,
     topicScope,
     persona,
@@ -61,6 +70,7 @@ app.post('/api/profiles', (req: Request, res: Response) => {
     accentColor,
     status,
     rawApiKey,
+    rawApiKeys,
   } = req.body;
 
   if (!name || typeof name !== 'string' || name.trim() === '') {
@@ -75,6 +85,7 @@ app.post('/api/profiles', (req: Request, res: Response) => {
   try {
     const created = db.createProfile({
       name: name.trim(),
+      provider: provider || 'gemini',
       position: position.trim(),
       topicScope: topicScope?.trim() || 'All Topics',
       persona: persona?.trim() || 'An articulate, rigorous debate specialist.',
@@ -90,6 +101,7 @@ app.post('/api/profiles', (req: Request, res: Response) => {
       accentColor: accentColor || 'cyan',
       status: status || 'enabled',
       rawApiKey: typeof rawApiKey === 'string' && rawApiKey.trim() !== '' ? rawApiKey.trim() : undefined,
+      rawApiKeys: Array.isArray(rawApiKeys) ? rawApiKeys : undefined,
     });
     res.status(201).json({ success: true, profile: created });
   } catch (err: unknown) {
@@ -127,14 +139,60 @@ app.delete('/api/profiles/:id', (req: Request, res: Response) => {
 });
 
 app.post('/api/profiles/:id/test', async (req: Request, res: Response) => {
-  const { apiKeyOverride, modelIdOverride } = req.body;
-  const result = await testGeminiConnection(req.params.id, apiKeyOverride, modelIdOverride);
+  const { apiKeyOverride, modelIdOverride, providerOverride } = req.body;
+  const result = await testProviderConnection(req.params.id, apiKeyOverride, modelIdOverride, providerOverride);
   res.json(result);
 });
 
 app.post('/api/profiles/:id/test-voice', async (req: Request, res: Response) => {
-  const { apiKeyOverride, ttsModelOverride, voiceOverride, styleOverride } = req.body;
-  const result = await testVoiceAudio(req.params.id, apiKeyOverride, ttsModelOverride, voiceOverride, styleOverride);
+  const { apiKeyOverride, ttsModelOverride, voiceOverride, styleOverride, providerOverride } = req.body;
+  const result = await testVoiceAudio(req.params.id, apiKeyOverride, ttsModelOverride, voiceOverride, styleOverride, providerOverride);
+  res.json(result);
+});
+
+// ----------------------------------------------------
+// AI Providers & Dynamic Model Discovery Endpoints
+// ----------------------------------------------------
+
+app.get('/api/providers', (req: Request, res: Response) => {
+  res.json({
+    providers: PROVIDER_CATALOGS,
+  });
+});
+
+app.get('/api/providers/:provider/models', async (req: Request, res: Response) => {
+  const provider = req.params.provider as AIProvider;
+  let apiKey = (req.query.apiKey as string) || '';
+  const profileId = (req.query.profileId as string) || '';
+
+  if (!apiKey && profileId) {
+    const profile = db.getRawProfile(profileId);
+    if (profile) {
+      apiKey = db.resolveProfileApiKey(profile) || '';
+    }
+  }
+
+  const models = await fetchLiveProviderModels(provider, apiKey);
+  res.json({ provider, models });
+});
+
+app.post('/api/providers/test-connection', async (req: Request, res: Response) => {
+  const { provider, apiKey, modelId } = req.body;
+  if (!provider) {
+    res.status(400).json({ error: 'Provider is required' });
+    return;
+  }
+  const result = await testProviderConnection('direct-test', apiKey, modelId, provider as AIProvider);
+  res.json(result);
+});
+
+app.post('/api/providers/test-voice', async (req: Request, res: Response) => {
+  const { provider, apiKey, ttsModelId, voiceName } = req.body;
+  if (!provider) {
+    res.status(400).json({ error: 'Provider is required' });
+    return;
+  }
+  const result = await testVoiceAudio('direct-test', apiKey, ttsModelId, voiceName, undefined, provider as AIProvider);
   res.json(result);
 });
 

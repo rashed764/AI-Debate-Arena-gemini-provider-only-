@@ -4,6 +4,7 @@ import { DebateArena } from './components/DebateArena';
 import { DebateList } from './components/DebateList';
 import { AISettingsView } from './components/AISettingsModal';
 import { CreateDebateModal } from './components/CreateDebateModal';
+import { ProviderManager } from './components/ProviderManager';
 import { AudioPlaybackBar } from './components/AudioPlaybackBar';
 import { AIConfigPublic, DebaterProfilePublic, Debate, DebateTurn, PersonaType, PlaybackMode } from './types';
 
@@ -20,6 +21,7 @@ export default function App() {
 
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isProviderManagerOpen, setIsProviderManagerOpen] = useState(false);
 
   // Admin authentication (open access)
   const [adminToken] = useState<string>('open_access');
@@ -174,6 +176,7 @@ export default function App() {
   useEffect(() => {
     const audio = new Audio();
     audio.preload = 'auto';
+    audio.crossOrigin = 'anonymous';
     audioElementRef.current = audio;
 
     const onEndedListener = () => callbacksRef.current.onEnded();
@@ -596,18 +599,21 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-slate-950">
-      {/* Top Navbar */}
-      <Navbar
-        currentView={currentView}
-        setCurrentView={setCurrentView}
-        openCreateModal={() => setIsCreateModalOpen(true)}
-        openAdminModal={() => {}}
-        isAdmin={true}
-        onLogoutAdmin={() => {}}
-        profiles={profiles}
-        activeDebater1Name={activeDebate?.debater1?.name}
-        activeDebater2Name={activeDebate?.debater2?.name}
-      />
+      {/* Top Navbar (rendered when browsing directory or settings) */}
+      {currentView !== 'arena' && (
+        <Navbar
+          currentView={currentView}
+          setCurrentView={setCurrentView}
+          openCreateModal={() => setIsCreateModalOpen(true)}
+          openAdminModal={() => {}}
+          openProviderManager={() => setIsProviderManagerOpen(true)}
+          isAdmin={true}
+          onLogoutAdmin={() => {}}
+          profiles={profiles}
+          activeDebater1Name={activeDebate?.debater1?.name}
+          activeDebater2Name={activeDebate?.debater2?.name}
+        />
+      )}
 
       {/* Main View Router */}
       <main className="flex-1">
@@ -636,6 +642,8 @@ export default function App() {
             autoplayBlocked={autoplayBlocked}
             onUnlockAudio={handleUnlockAudio}
             audioElement={audioElementRef.current}
+            onNavigateView={setCurrentView}
+            onOpenCreateModal={() => setIsCreateModalOpen(true)}
           />
         )}
 
@@ -664,25 +672,27 @@ export default function App() {
         )}
       </main>
 
-      {/* Floating Audio Playback Controller Bar */}
-      <AudioPlaybackBar
-        playbackMode={playbackMode}
-        onChangePlaybackMode={handleChangePlaybackMode}
-        isPlaying={isAudioPlaying}
-        isMuted={isMuted}
-        volume={volume}
-        speed={speed}
-        activeSpeaker={activeSpeaker}
-        currentStatementTitle={currentStatementTitle}
-        onTogglePlayPause={handleTogglePlayPause}
-        onToggleMute={() => setIsMuted(!isMuted)}
-        onChangeVolume={setVolume}
-        onChangeSpeed={setSpeed}
-        onReplayCurrent={handleReplayCurrent}
-        hasPlayableAudio={!!activeDebate?.messages.some(m => m.audioStatus === 'ready')}
-        autoplayBlocked={autoplayBlocked}
-        onUnlockAudio={handleUnlockAudio}
-      />
+      {/* Floating Audio Playback Controller Bar (for non-arena views) */}
+      {currentView !== 'arena' && (
+        <AudioPlaybackBar
+          playbackMode={playbackMode}
+          onChangePlaybackMode={handleChangePlaybackMode}
+          isPlaying={isAudioPlaying}
+          isMuted={isMuted}
+          volume={volume}
+          speed={speed}
+          activeSpeaker={activeSpeaker}
+          currentStatementTitle={currentStatementTitle}
+          onTogglePlayPause={handleTogglePlayPause}
+          onToggleMute={() => setIsMuted(!isMuted)}
+          onChangeVolume={setVolume}
+          onChangeSpeed={setSpeed}
+          onReplayCurrent={handleReplayCurrent}
+          hasPlayableAudio={!!activeDebate?.messages.some(m => m.audioStatus === 'ready')}
+          autoplayBlocked={autoplayBlocked}
+          onUnlockAudio={handleUnlockAudio}
+        />
+      )}
 
       {/* Modals */}
       <CreateDebateModal
@@ -690,6 +700,11 @@ export default function App() {
         onClose={() => setIsCreateModalOpen(false)}
         onCreate={handleCreateDebate}
         profiles={profiles}
+      />
+
+      <ProviderManager
+        isOpen={isProviderManagerOpen}
+        onClose={() => setIsProviderManagerOpen(false)}
       />
     </div>
   );

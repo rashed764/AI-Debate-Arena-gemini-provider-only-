@@ -1,5 +1,31 @@
 export type PersonaType = string;
 
+export type AIProvider = 'gemini' | 'openai' | 'groq' | 'openrouter';
+
+export interface KeyPoolItem {
+  id: string;
+  mask: string;
+  status: 'active' | 'rate_limited' | 'error' | 'untested';
+  lastTestedAt?: string | null;
+  errorMessage?: string | null;
+}
+
+export interface ProviderModelInfo {
+  id: string;
+  name: string;
+  provider: AIProvider;
+  type: 'text' | 'tts';
+  description?: string;
+  isRecommended?: boolean;
+}
+
+export interface ProviderVoiceInfo {
+  id: string;
+  name: string;
+  provider: AIProvider;
+  description: string;
+}
+
 export type AccentColor = 'cyan' | 'amber' | 'emerald' | 'purple' | 'rose' | 'blue' | 'indigo' | 'orange';
 
 export type DebateMode = 'automatic' | 'interactive';
@@ -13,6 +39,7 @@ export type AudioGenerationStatus = 'none' | 'generating' | 'ready' | 'failed';
 export interface DebaterProfile {
   id: string;
   name: string;
+  provider: AIProvider;
   position: string;
   topicScope: string;
   persona: string;
@@ -29,21 +56,26 @@ export interface DebaterProfile {
   status: 'enabled' | 'disabled';
   connectionStatus?: 'not_configured' | 'connected' | 'error';
   encryptedApiKey?: string;
+  encryptedApiKeys?: string[];
+  keyPool?: KeyPoolItem[];
   lastTestedAt?: string | null;
   lastTestMessage?: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface DebaterProfilePublic extends Omit<DebaterProfile, 'encryptedApiKey'> {
+export interface DebaterProfilePublic extends Omit<DebaterProfile, 'encryptedApiKey' | 'encryptedApiKeys'> {
   hasKey: boolean;
   keyMask: string;
+  keyMasks: string[];
   keySource: 'database' | 'environment' | 'none';
+  keyPool?: KeyPoolItem[];
 }
 
 export interface DebaterProfileSnapshot {
   id: string;
   name: string;
+  provider?: AIProvider;
   position: string;
   topicScope?: string;
   persona: string;

@@ -4,6 +4,63 @@ export interface AudioAnalysis {
   frequencyData: number[]; // 16 normalized values (0 to 100)
   volumeLevel: number;     // 0 to 100
   isVoiceActive: boolean;
+  analyserNode: AnalyserNode | null;
+  audioContext: AudioContext | null;
+}
+
+interface AudioGraph {
+  ctx: AudioContext;
+  analyser: AnalyserNode;
+  source: MediaElementAudioSourceNode;
+}
+
+// Global cache ensures only ONE MediaElementSourceNode is created per HTMLAudioElement
+// preventing Web Audio InvalidStateError and audio cutoff
+const audioGraphMap = new WeakMap<HTMLAudioElement, AudioGraph>();
+let sharedAudioContext: AudioContext | null = null;
+
+export function getOrCreateAudioGraph(audioElement: HTMLAudioElement): AudioGraph | null {
+  try {
+    if (audioGraphMap.has(audioElement)) {
+      return audioGraphMap.get(audioElement)!;
+    }
+
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return null;
+
+    if (!sharedAudioContext || sharedAudioContext.state === 'closed') {
+      sharedAudioContext = new AudioContextClass();
+    }
+
+    const ctx = sharedAudioContext;
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 128; // 64 frequency bins for rich visualizer resolution
+    analyser.smoothingTimeConstant = 0.8;
+
+    // Check if element has a cached source node attached
+    let source = (audioElement as any).__mediaElementSourceNode as MediaElementAudioSourceNode | undefined;
+    if (!source) {
+      source = ctx.createMediaElementSource(audioElement);
+      (audioElement as any).__mediaElementSourceNode = source;
+    }
+
+    source.connect(analyser);
+    analyser.connect(ctx.destination);
+
+    const graph: AudioGraph = { ctx, analyser, source };
+    audioGraphMap.set(audioElement, graph);
+    return graph;
+  } catch (err) {
+    // If the element was already attached on an existing context, recover safely
+    console.debug('Web Audio API attach note:', err);
+    if (sharedAudioContext) {
+      const analyser = sharedAudioContext.createAnalyser();
+      analyser.fftSize = 128;
+      analyser.smoothingTimeConstant = 0.8;
+      return { ctx: sharedAudioContext, analyser, source: (audioElement as any).__mediaElementSourceNode };
+    }
+    return null;
+  }
 }
 
 export function useAudioAnalyser(
@@ -11,60 +68,40 @@ export function useAudioAnalyser(
   isPlaying: boolean,
   isMuted: boolean
 ): AudioAnalysis {
+  const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null);
+  const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
+
   const [analysis, setAnalysis] = useState<AudioAnalysis>({
     frequencyData: new Array(16).fill(0),
     volumeLevel: 0,
     isVoiceActive: false,
+    analyserNode: null,
+    audioContext: null,
   });
 
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const isAttachedRef = useRef(false);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const graphRef = useRef<AudioGraph | null>(null);
 
   useEffect(() => {
     if (!audioElement) return;
 
-    const setupAudioContext = () => {
-      try {
-        if (!audioContextRef.current) {
-          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-          if (!AudioContextClass) return;
-          audioContextRef.current = new AudioContextClass();
-        }
+    const setup = () => {
+      const graph = getOrCreateAudioGraph(audioElement);
+      if (graph) {
+        graphRef.current = graph;
+        analyserRef.current = graph.analyser;
+        setAnalyserNode(graph.analyser);
+        setAudioContext(graph.ctx);
 
-        const ctx = audioContextRef.current;
-        if (!analyserRef.current) {
-          const analyser = ctx.createAnalyser();
-          analyser.fftSize = 64; // Yields 32 frequency bins
-          analyser.smoothingTimeConstant = 0.75;
-          analyserRef.current = analyser;
+        if (graph.ctx.state === 'suspended') {
+          graph.ctx.resume().catch(() => {});
         }
-
-        if (!sourceNodeRef.current && !isAttachedRef.current) {
-          try {
-            const source = ctx.createMediaElementSource(audioElement);
-            source.connect(analyserRef.current);
-            analyserRef.current.connect(ctx.destination);
-            sourceNodeRef.current = source;
-            isAttachedRef.current = true;
-          } catch (attachErr) {
-            // In case media element is already connected or restricted
-            console.debug('MediaElementSource attach fallback:', attachErr);
-          }
-        }
-
-        if (ctx.state === 'suspended') {
-          ctx.resume().catch(() => {});
-        }
-      } catch (err) {
-        console.debug('Web Audio API initialization note:', err);
       }
     };
 
     const handleUserInteraction = () => {
-      setupAudioContext();
+      setup();
       window.removeEventListener('click', handleUserInteraction);
       window.removeEventListener('keydown', handleUserInteraction);
     };
@@ -73,7 +110,7 @@ export function useAudioAnalyser(
     window.addEventListener('keydown', handleUserInteraction, { once: true });
 
     if (isPlaying) {
-      setupAudioContext();
+      setup();
     }
 
     return () => {
@@ -88,21 +125,29 @@ export function useAudioAnalyser(
     const tick = () => {
       if (!active) return;
 
+      const currentAnalyser = analyserRef.current || graphRef.current?.analyser || null;
+      const currentCtx = graphRef.current?.ctx || null;
+
+      if (currentCtx && currentCtx.state === 'suspended' && isPlaying) {
+        currentCtx.resume().catch(() => {});
+      }
+
       if (!isPlaying || isMuted) {
         setAnalysis({
           frequencyData: new Array(16).fill(0),
           volumeLevel: 0,
           isVoiceActive: false,
+          analyserNode: currentAnalyser,
+          audioContext: currentCtx,
         });
         animationFrameRef.current = requestAnimationFrame(tick);
         return;
       }
 
-      const analyser = analyserRef.current;
-      if (analyser && isAttachedRef.current) {
-        const bufferLength = analyser.frequencyBinCount;
+      if (currentAnalyser) {
+        const bufferLength = currentAnalyser.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
-        analyser.getByteFrequencyData(dataArray);
+        currentAnalyser.getByteFrequencyData(dataArray);
 
         // Map to 16 display bars
         const bars: number[] = [];
@@ -118,12 +163,14 @@ export function useAudioAnalyser(
         }
 
         const avgVolume = Math.round(total / 16);
-        const hasSound = avgVolume > 4;
+        const hasSound = avgVolume > 3;
 
         setAnalysis({
           frequencyData: bars,
           volumeLevel: avgVolume,
           isVoiceActive: hasSound,
+          analyserNode: currentAnalyser,
+          audioContext: currentCtx,
         });
       } else {
         // Fallback: Generates an organic speech-like waveform modulation while audio is actively playing
@@ -143,6 +190,8 @@ export function useAudioAnalyser(
           frequencyData: bars,
           volumeLevel: Math.round(total / 16),
           isVoiceActive: true,
+          analyserNode: null,
+          audioContext: null,
         });
       }
 
@@ -157,7 +206,7 @@ export function useAudioAnalyser(
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [isPlaying, isMuted]);
+  }, [isPlaying, isMuted, analyserNode, audioContext]);
 
   return analysis;
 }

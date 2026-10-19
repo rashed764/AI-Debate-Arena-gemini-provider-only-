@@ -11,6 +11,7 @@ import type {
   DebaterProfilePublic,
   DebaterProfileSnapshot,
   VoteRecord,
+  AIProvider,
 } from './types.ts';
 import { decryptSecret, encryptSecret, maskApiKey } from './crypto.ts';
 
@@ -39,6 +40,7 @@ const DEFAULT_PROFILES: Record<string, DebaterProfile> = {
   'profile-atheist': {
     id: 'profile-atheist',
     name: 'Atheist AI',
+    provider: 'gemini',
     position: 'Naturalism, Quantum Cosmology & Empirical Epistemology',
     topicScope: 'All Topics',
     persona:
@@ -63,6 +65,7 @@ const DEFAULT_PROFILES: Record<string, DebaterProfile> = {
   'profile-believer': {
     id: 'profile-believer',
     name: 'Believer AI',
+    provider: 'gemini',
     position: 'Metaphysical Realism, Cosmic Fine-Tuning & Divine Purpose',
     topicScope: 'All Topics',
     persona:
@@ -87,6 +90,7 @@ const DEFAULT_PROFILES: Record<string, DebaterProfile> = {
   'profile-nuclear-pro': {
     id: 'profile-nuclear-pro',
     name: 'Nuclear Energy Advocate',
+    provider: 'gemini',
     position: 'Nuclear energy is essential for a reliable, clean, zero-carbon grid',
     topicScope: 'Energy & Climate',
     persona:
@@ -111,6 +115,7 @@ const DEFAULT_PROFILES: Record<string, DebaterProfile> = {
   'profile-nuclear-critic': {
     id: 'profile-nuclear-critic',
     name: 'Renewables & Risk Analyst',
+    provider: 'gemini',
     position: 'Nuclear expansion is too slow, expensive, and risk-prone compared to renewables',
     topicScope: 'Energy & Climate',
     persona:
@@ -253,6 +258,7 @@ class ArenaDatabase {
     return {
       id: profile.id,
       name: profile.name,
+      provider: profile.provider || 'gemini',
       position: customPosition?.trim() || profile.position,
       topicScope: profile.topicScope,
       persona: profile.persona,
@@ -479,27 +485,51 @@ class ArenaDatabase {
   }
 
   private toPublicProfile(profile: DebaterProfile): DebaterProfilePublic {
-    const rawKey = this.resolveProfileApiKey(profile);
-    const hasKey = !!rawKey && rawKey.trim().length > 0;
-    const keyMask = maskApiKey(rawKey);
+    const rawKeys = this.resolveProfileApiKeys(profile);
+    const hasKey = rawKeys.length > 0;
+    const keyMasks = rawKeys.map(k => maskApiKey(k));
+    const keyMask = keyMasks[0] || 'Not configured';
 
     let keySource: 'database' | 'environment' | 'none' = 'none';
-    if (profile.encryptedApiKey) {
+    if ((profile.encryptedApiKeys && profile.encryptedApiKeys.length > 0) || profile.encryptedApiKey) {
       keySource = 'database';
-    } else if (this.getEnvKeyForProfile(profile.id, profile.name)) {
+    } else if (this.getEnvKeyForProfile(profile.id, profile.name, profile.provider)) {
       keySource = 'environment';
     }
 
-    const { encryptedApiKey, ...publicFields } = profile;
+    const keyPool = rawKeys.map((k, idx) => ({
+      id: `key-${idx}`,
+      mask: maskApiKey(k),
+      status: idx === 0 ? ('active' as const) : ('untested' as const),
+      lastTestedAt: profile.lastTestedAt || null,
+      errorMessage: null,
+    }));
+
+    const { encryptedApiKey, encryptedApiKeys, ...publicFields } = profile;
     return {
       ...publicFields,
+      provider: profile.provider || 'gemini',
       hasKey,
       keyMask,
+      keyMasks,
+      keyPool,
       keySource,
     };
   }
 
-  private getEnvKeyForProfile(profileId: string, name?: string): string | undefined {
+  private getEnvKeyForProfile(profileId: string, name?: string, provider?: AIProvider): string | undefined {
+    const prov = provider || 'gemini';
+
+    if (prov === 'openai') {
+      return process.env.OPENAI_API_KEY;
+    }
+    if (prov === 'groq') {
+      return process.env.GROQ_API_KEY;
+    }
+    if (prov === 'openrouter') {
+      return process.env.OPENROUTER_API_KEY;
+    }
+
     const normalizedId = profileId.toLowerCase();
     const normalizedName = (name || '').toLowerCase();
 
@@ -510,31 +540,61 @@ class ArenaDatabase {
       return process.env.GEMINI_API_KEY_BELIEVER || process.env.GEMINI_API_KEY;
     }
 
-    // Dynamic env key lookup e.g. GEMINI_API_KEY_PROFILE_NUCLEAR_PRO
     const envVarName = `GEMINI_API_KEY_${profileId.toUpperCase().replace(/\W+/g, '_')}`;
     return process.env[envVarName] || process.env.GEMINI_API_KEY;
   }
 
-  public resolveProfileApiKey(profileOrId: DebaterProfile | string): string | undefined {
+  public resolveProfileApiKeys(profileOrId: DebaterProfile | string): string[] {
     const profile = typeof profileOrId === 'string' ? this.data.profiles[profileOrId] : profileOrId;
-    if (!profile) return undefined;
+    if (!profile) return [];
 
-    if (profile.encryptedApiKey) {
-      try {
-        const decrypted = decryptSecret(profile.encryptedApiKey);
-        if (decrypted && decrypted.trim().length > 0) {
-          return decrypted.trim();
+    const keys: string[] = [];
+
+    // 1. Check array of encryptedApiKeys
+    if (Array.isArray(profile.encryptedApiKeys) && profile.encryptedApiKeys.length > 0) {
+      for (const enc of profile.encryptedApiKeys) {
+        try {
+          const dec = decryptSecret(enc);
+          if (dec && dec.trim().length > 0 && !keys.includes(dec.trim())) {
+            keys.push(dec.trim());
+          }
+        } catch (err) {
+          console.warn(`Failed decrypting key for profile ${profile.id}:`, err);
         }
-      } catch (err) {
-        console.warn(`Decryption failed for profile ${profile.id}:`, err instanceof Error ? err.message : err);
-        delete profile.encryptedApiKey;
-        this.save();
       }
     }
-    return this.getEnvKeyForProfile(profile.id, profile.name);
+
+    // 2. Backward compatibility: check single encryptedApiKey
+    if (profile.encryptedApiKey) {
+      try {
+        const dec = decryptSecret(profile.encryptedApiKey);
+        if (dec && dec.trim().length > 0 && !keys.includes(dec.trim())) {
+          keys.push(dec.trim());
+        }
+      } catch (err) {
+        console.warn(`Decryption failed for profile ${profile.id}:`, err);
+      }
+    }
+
+    // 3. Fallback to environment variables
+    if (keys.length === 0) {
+      const envKey = this.getEnvKeyForProfile(profile.id, profile.name, profile.provider);
+      if (envKey && envKey.trim().length > 0) {
+        keys.push(envKey.trim());
+      }
+    }
+
+    return keys;
   }
 
-  public createProfile(data: Partial<DebaterProfile> & { rawApiKey?: string }): DebaterProfilePublic {
+  public resolveProfileApiKey(profileOrId: DebaterProfile | string): string | undefined {
+    const keys = this.resolveProfileApiKeys(profileOrId);
+    return keys[0];
+  }
+
+  public createProfile(
+    data: Partial<DebaterProfile> & { rawApiKey?: string; rawApiKeys?: string[] }
+  ): DebaterProfilePublic {
     const id = data.id || `profile-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
     if (this.data.profiles[id]) {
       throw new Error(`Profile with id "${id}" already exists.`);
@@ -544,12 +604,13 @@ class ArenaDatabase {
     const newProfile: DebaterProfile = {
       id,
       name: data.name?.trim() || 'Custom AI Debater',
+      provider: data.provider || 'gemini',
       position: data.position?.trim() || 'Defends reasoned perspective',
       topicScope: data.topicScope?.trim() || 'All Topics',
       persona: data.persona?.trim() || 'An articulate, rigorous debate specialist.',
-      modelId: data.modelId?.trim() || 'gemini-3.8-flash',
-      ttsModelId: data.ttsModelId?.trim() || 'gemini-3.8-flash-lite-tts',
-      voiceName: data.voiceName?.trim() || 'Fenrir',
+      modelId: data.modelId?.trim() || (data.provider === 'openai' ? 'gpt-4o' : data.provider === 'groq' ? 'llama-3.3-70b-versatile' : data.provider === 'openrouter' ? 'anthropic/claude-3.7-sonnet' : 'gemini-3.8-flash'),
+      ttsModelId: data.ttsModelId?.trim() || (data.provider === 'openai' ? 'tts-1' : 'gemini-3.8-flash-lite-tts'),
+      voiceName: data.voiceName?.trim() || (data.provider === 'openai' ? 'onyx' : 'Fenrir'),
       voiceStyle: data.voiceStyle?.trim() || 'Articulate, confident, analytical',
       voiceSpeed: Number(data.voiceSpeed) || 1.0,
       ttsEnabled: data.ttsEnabled ?? true,
@@ -565,34 +626,54 @@ class ArenaDatabase {
       updatedAt: now,
     };
 
-    if (data.rawApiKey && data.rawApiKey.trim().length > 0) {
-      newProfile.encryptedApiKey = encryptSecret(data.rawApiKey.trim());
+    const keysToStore: string[] = [];
+    if (Array.isArray(data.rawApiKeys)) {
+      keysToStore.push(...data.rawApiKeys.map(k => k.trim()).filter(Boolean));
+    } else if (data.rawApiKey && data.rawApiKey.trim()) {
+      keysToStore.push(data.rawApiKey.trim());
+    }
+
+    if (keysToStore.length > 0) {
+      newProfile.encryptedApiKeys = keysToStore.map(k => encryptSecret(k));
+      newProfile.encryptedApiKey = encryptSecret(keysToStore[0]);
     }
 
     this.data.profiles[id] = newProfile;
     this.save();
-    this.logAudit(`Created debater profile: ${newProfile.name} (${newProfile.id})`);
+    this.logAudit(`Created debater profile: ${newProfile.name} (${newProfile.id}) on provider ${newProfile.provider}`);
 
     return this.toPublicProfile(newProfile);
   }
 
   public updateProfile(
     id: string,
-    updates: Partial<DebaterProfile> & { rawApiKey?: string }
+    updates: Partial<DebaterProfile> & { rawApiKey?: string; rawApiKeys?: string[] }
   ): DebaterProfilePublic {
     const current = this.data.profiles[id];
     if (!current) {
       throw new Error(`Profile with id "${id}" not found.`);
     }
 
-    if (updates.rawApiKey !== undefined) {
+    if (updates.rawApiKeys !== undefined) {
+      const keysToStore = updates.rawApiKeys.map(k => k.trim()).filter(Boolean);
+      if (keysToStore.length === 0) {
+        delete current.encryptedApiKey;
+        delete current.encryptedApiKeys;
+      } else {
+        current.encryptedApiKeys = keysToStore.map(k => encryptSecret(k));
+        current.encryptedApiKey = encryptSecret(keysToStore[0]);
+      }
+    } else if (updates.rawApiKey !== undefined) {
       if (updates.rawApiKey.trim() === '') {
         delete current.encryptedApiKey;
+        delete current.encryptedApiKeys;
       } else {
         current.encryptedApiKey = encryptSecret(updates.rawApiKey.trim());
+        current.encryptedApiKeys = [current.encryptedApiKey];
       }
     }
 
+    if (updates.provider !== undefined) current.provider = updates.provider;
     if (updates.name !== undefined) current.name = updates.name.trim();
     if (updates.position !== undefined) current.position = updates.position.trim();
     if (updates.topicScope !== undefined) current.topicScope = updates.topicScope.trim();

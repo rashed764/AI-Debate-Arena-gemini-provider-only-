@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Sliders, Plus, Users, Cpu } from 'lucide-react';
+import { Shield, Sliders, Plus, Users, Cpu, Key } from 'lucide-react';
 import { AIConfigPublic, DebaterProfilePublic } from '../types';
 
 interface NavbarProps {
@@ -7,6 +7,7 @@ interface NavbarProps {
   setCurrentView: (view: 'arena' | 'list' | 'settings') => void;
   openCreateModal: () => void;
   openAdminModal: () => void;
+  openProviderManager: () => void;
   isAdmin: boolean;
   onLogoutAdmin: () => void;
   profiles?: DebaterProfilePublic[];
@@ -20,6 +21,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentView,
   setCurrentView,
   openCreateModal,
+  openProviderManager,
   profiles = [],
   activeDebater1Name,
   activeDebater2Name,
@@ -33,7 +35,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center gap-3">
           <button
             onClick={() => setCurrentView('list')}
-            className="flex items-center gap-2.5 text-left transition-opacity hover:opacity-90"
+            className="flex items-center gap-2.5 text-left transition-opacity hover:opacity-90 cursor-pointer"
           >
             <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 via-indigo-600 to-amber-500 p-0.5 shadow-lg shadow-cyan-950/50">
               <div className="flex h-full w-full items-center justify-center rounded-[10px] bg-slate-950">
@@ -76,7 +78,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center gap-2 sm:gap-3">
           <button
             onClick={() => setCurrentView('list')}
-            className={`rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition ${
+            className={`rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition cursor-pointer ${
               currentView === 'list'
                 ? 'bg-slate-800 text-white'
                 : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
@@ -87,7 +89,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           <button
             onClick={() => setCurrentView('arena')}
-            className={`rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition ${
+            className={`rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition cursor-pointer ${
               currentView === 'arena'
                 ? 'bg-slate-800 text-white'
                 : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
@@ -97,8 +99,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
 
           <button
+            onClick={openProviderManager}
+            className="flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-950/55 px-3 py-1.5 text-xs sm:text-sm font-medium text-cyan-200 hover:bg-cyan-900/70 transition cursor-pointer"
+            title="Manage Provider Key Pools & 429 Rotation"
+          >
+            <Key className="h-3.5 w-3.5 text-cyan-400" />
+            <span className="hidden md:inline">Key Pools</span>
+          </button>
+
+          <button
             onClick={() => setCurrentView('settings')}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition ${
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-medium transition cursor-pointer ${
               currentView === 'settings'
                 ? 'bg-indigo-600/80 text-white'
                 : 'text-slate-300 hover:bg-slate-900 hover:text-white border border-slate-800'
@@ -111,7 +122,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           <button
             onClick={openCreateModal}
-            className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 px-3.5 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-md shadow-cyan-950/40 hover:from-cyan-500 hover:to-blue-500 transition active:scale-95"
+            className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 px-3.5 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-md shadow-cyan-950/40 hover:from-cyan-500 hover:to-blue-500 transition active:scale-95 cursor-pointer"
           >
             <Plus className="h-4 w-4" />
             <span>New Debate</span>

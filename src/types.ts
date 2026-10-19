@@ -1,5 +1,31 @@
 export type PersonaType = string;
 
+export type AIProvider = 'gemini' | 'openai' | 'groq' | 'openrouter';
+
+export interface KeyPoolItem {
+  id: string;
+  mask: string;
+  status: 'active' | 'rate_limited' | 'error' | 'untested';
+  lastTestedAt?: string | null;
+  errorMessage?: string | null;
+}
+
+export interface ProviderModelInfo {
+  id: string;
+  name: string;
+  provider: AIProvider;
+  type: 'text' | 'tts';
+  description?: string;
+  isRecommended?: boolean;
+}
+
+export interface ProviderVoiceInfo {
+  id: string;
+  name: string;
+  provider: AIProvider;
+  description: string;
+}
+
 export type AccentColor = 'cyan' | 'amber' | 'emerald' | 'purple' | 'rose' | 'blue' | 'indigo' | 'orange';
 
 export type DebateMode = 'automatic' | 'interactive';
@@ -10,6 +36,7 @@ export type AudioGenerationStatus = 'none' | 'generating' | 'ready' | 'failed';
 export interface DebaterProfile {
   id: string;
   name: string;
+  provider: AIProvider;
   position: string;
   topicScope: string;
   persona: string;
@@ -27,6 +54,9 @@ export interface DebaterProfile {
   connectionStatus?: 'not_configured' | 'connected' | 'error';
   lastTestedAt?: string | null;
   lastTestMessage?: string | null;
+  apiKeysCount?: number;
+  keyMasks?: string[];
+  keyPool?: KeyPoolItem[];
   createdAt: string;
   updatedAt: string;
 }
@@ -35,11 +65,13 @@ export interface DebaterProfilePublic extends DebaterProfile {
   hasKey: boolean;
   keyMask: string;
   keySource: 'database' | 'environment' | 'none';
+  keyPool?: KeyPoolItem[];
 }
 
 export interface DebaterProfileSnapshot {
   id: string;
   name: string;
+  provider?: AIProvider;
   position: string;
   topicScope?: string;
   persona: string;

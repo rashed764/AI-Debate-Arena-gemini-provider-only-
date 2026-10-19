@@ -1,0 +1,6 @@
+{
+  "summary": "Comprehensive implementation plan for adding multi-provider AI support (Google Gemini, OpenAI, Groq, OpenRouter), multi-key pooling with automatic failover on rate limit (429), dynamic model listing and API fetching, and provider-specific TTS model and voice selection in AI Debater Profiles.",
+  "updatedAt": "2026-10-19T08:35:35.913632253Z",
+  "requestFeedback": true,
+  "userFacing": true
+}
