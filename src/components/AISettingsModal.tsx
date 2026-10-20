@@ -111,23 +111,20 @@ const DEFAULT_PROVIDER_MODELS: Record<
   AIProvider,
   {
     text: Array<{ id: string; name: string; isRecommended?: boolean }>;
-    tts: Array<{ id: string; name: string }>;
+    tts: Array<{ id: string; name: string; isRecommended?: boolean }>;
     voices: Array<{ id: string; desc: string }>;
   }
 > = {
   gemini: {
     text: [
       { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (Default Recommended - Ultra Fast, Free Tier)', isRecommended: true },
-      { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash (High Performance, Free Tier)' },
-      { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite (Lightweight, Free Tier)' },
+      { id: 'gemini-flash-latest', name: 'Gemini Flash Latest (Stable Auto-Updating)' },
       { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite (High Throughput)' },
       { id: 'gemini-4-argon', name: 'Gemini 4 Argon (High Thinking & Complex Reasoning, Paid Tier)' },
     ],
     tts: [
-      { id: 'gemini-3.8-flash-lite-tts', name: 'Gemini 3.8 Flash Lite TTS (Recommended Low Latency, Free Tier)' },
-      { id: 'gemini-3.8-flash-tts', name: 'Gemini 3.8 Flash TTS (High Fidelity Speech, Free Tier)' },
-      { id: 'gemini-3.5-flash-tts', name: 'Gemini 3.5 Flash TTS (Classic Balanced Speech, Free Tier)' },
-      { id: 'gemini-3.1-flash-lite-tts', name: 'Gemini 3.1 Flash Lite TTS (High Throughput, Free Tier)' },
+      { id: 'gemini-3.8-flash-lite-tts', name: 'Gemini 3.8 Flash Lite TTS (Recommended Low Latency, Free Tier)', isRecommended: true },
+      { id: 'gemini-3.8-flash-tts', name: 'Gemini 3.8 Flash TTS (High Fidelity Speech & Screenplay)' },
     ],
     voices: [
       { id: 'Fenrir', desc: 'Authoritative, sharp, deep, analytical' },
@@ -744,15 +741,25 @@ export const AISettingsView: React.FC<AISettingsProps> = ({
           </div>
         </div>
 
-        {/* Global Security / Failover Note */}
-        <div className="pt-4 border-t border-slate-800/80 text-[11px] text-slate-500 space-y-1.5">
+        {/* Global Security / Failover Note & Quota Optimization Guide */}
+        <div className="pt-4 border-t border-slate-800/80 text-[11px] text-slate-500 space-y-2">
           <div className="flex items-center gap-1.5 text-cyan-400 font-bold uppercase tracking-wider text-[10px]">
             <ShieldCheck className="h-3.5 w-3.5" />
-            <span>Automatic Failover Active</span>
+            <span>Automatic Key Pool Failover</span>
           </div>
-          <p>
-            Add multiple API keys to any debater profile. If key #1 hits rate limits (429) during live arena debates, backup keys take over instantly.
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            Configure multiple API keys per profile. If key #1 encounters quota exhaustion or rate limits (429), backup keys seamlessly take over.
           </p>
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/40 p-2.5 space-y-1 text-emerald-300">
+            <span className="font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 text-emerald-400">
+              ⚡ Eco Quota Optimizer Active
+            </span>
+            <ul className="text-[10px] text-emerald-300/90 list-disc pl-3.5 space-y-0.5">
+              <li>On-demand audio: Audio is synthesized only when clicking play, cutting API calls by 50%+.</li>
+              <li>Rolling context: Only the immediate opponent's turn is sent, slashing tokens by 75%.</li>
+              <li>Concise speeches: 80–110 words keep speech synthesis ultra-fast and character-efficient.</li>
+            </ul>
+          </div>
         </div>
       </aside>
 

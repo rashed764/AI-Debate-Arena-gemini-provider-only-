@@ -649,6 +649,10 @@ export const CinematicArena: React.FC<CinematicArenaProps> = ({
                 <span>Debates Directory</span>
               </button>
             )}
+            <div className="hidden md:flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-950/60 px-2.5 py-1 text-[11px] font-bold text-emerald-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>⚡ Eco Mode: Token & Request Saver Active</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -1377,6 +1381,23 @@ export const CinematicArena: React.FC<CinematicArenaProps> = ({
                           {turn.speakerName}
                         </span>
                         <div className="flex items-center gap-2">
+                          {turn.audioStatus === 'generating' ? (
+                            <span className="text-[10px] font-mono text-amber-300 flex items-center gap-1 bg-amber-950/70 px-2 py-0.5 rounded border border-amber-500/40 animate-pulse">
+                              <Sparkles className="h-3 w-3 animate-spin text-amber-400" /> Synthesizing Voice...
+                            </span>
+                          ) : turn.audioStatus === 'ready' && turn.audioUrl ? (
+                            <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
+                              <Volume2 className="h-3 w-3" /> Voice Ready
+                            </span>
+                          ) : turn.audioStatus === 'failed' ? (
+                            <span className="text-[10px] font-mono text-rose-400 flex items-center gap-1 bg-rose-950/60 px-2 py-0.5 rounded border border-rose-500/30">
+                              <RotateCcw className="h-3 w-3" /> Retry Voice
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-mono text-cyan-300 flex items-center gap-1 bg-cyan-950/50 px-2 py-0.5 rounded border border-cyan-500/30 hover:border-cyan-400 transition">
+                              <Volume2 className="h-3 w-3 text-cyan-400" /> ⚡ On-Demand Voice • Click to Play
+                            </span>
+                          )}
                           {isCurrent && isAudioPlaying && (
                             <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-500/40 px-1.5 py-0.2 rounded">
                               LIVE VOICE SYNC

@@ -410,16 +410,21 @@ export const CreateDebateModal: React.FC<CreateDebateModalProps> = ({
             </div>
 
             <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                Audio Preference
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                  Audio Preference
+                </label>
+                <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-1.5 py-0.2 rounded">
+                  ⚡ Eco Mode
+                </span>
+              </div>
               <select
                 value={playbackMode}
                 onChange={e => setPlaybackMode(e.target.value as PlaybackMode)}
                 className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white focus:border-cyan-500 focus:outline-none"
               >
-                <option value="text_and_voice">Text &amp; Voice Synthesis (Recommended)</option>
-                <option value="text_only">Text-Only (Fastest, No Audio)</option>
+                <option value="text_and_voice">⚡ On-Demand Voice (Saves Quota, Recommended)</option>
+                <option value="text_only">Text-Only (Fastest, Zero Audio Calls)</option>
               </select>
             </div>
           </div>

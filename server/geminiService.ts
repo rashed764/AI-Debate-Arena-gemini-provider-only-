@@ -81,7 +81,15 @@ export async function testProviderConnection(
         : 'gemini-3.8-flash';
   }
 
-  const keys = overrideKey ? [overrideKey] : raw ? db.resolveProfileApiKeys(raw) : [];
+  if (provider === 'gemini' && (!targetModel || targetModel === 'gemini-3.5-flash-lite' || targetModel === 'gemini-3.6-flash' || targetModel.startsWith('gemini-1.5') || targetModel.startsWith('gemini-2.0'))) {
+    targetModel = 'gemini-3.8-flash';
+  }
+
+  let keys = overrideKey && overrideKey.trim().length > 0 ? [overrideKey.trim()] : raw ? db.resolveProfileApiKeys(raw) : [];
+
+  if (keys.length === 0 && provider === 'gemini' && process.env.GEMINI_API_KEY) {
+    keys = [process.env.GEMINI_API_KEY.trim()];
+  }
 
   if (keys.length === 0) {
     return {
@@ -175,7 +183,10 @@ export async function testVoiceAudio(
 ): Promise<{ success: boolean; message: string; audioUrl?: string; durationSeconds?: number }> {
   const raw = db.getRawProfile(profileOrId);
   const provider = providerOverride || raw?.provider || 'gemini';
-  const ttsModel = ttsModelOverride || raw?.ttsModelId || (provider === 'openai' ? 'tts-1' : 'gemini-3.8-flash-lite-tts');
+  let ttsModel = ttsModelOverride || raw?.ttsModelId || (provider === 'openai' ? 'tts-1' : 'gemini-3.8-flash-lite-tts');
+  if (provider === 'gemini' && (!ttsModel.includes('3.8') || ttsModel === 'gemini-3.5-flash-tts' || ttsModel === 'gemini-3.1-flash-lite-tts')) {
+    ttsModel = 'gemini-3.8-flash-lite-tts';
+  }
   const voice = voiceOverride || raw?.voiceName || (provider === 'openai' ? 'onyx' : 'Fenrir');
   const debaterName = raw?.name || 'AI Debater';
 
@@ -192,7 +203,10 @@ export async function testVoiceAudio(
     };
   }
 
-  const keys = overrideKey ? [overrideKey] : raw ? db.resolveProfileApiKeys(raw) : [];
+  let keys = overrideKey && overrideKey.trim().length > 0 ? [overrideKey.trim()] : raw ? db.resolveProfileApiKeys(raw) : [];
+  if (keys.length === 0 && provider === 'gemini' && process.env.GEMINI_API_KEY) {
+    keys = [process.env.GEMINI_API_KEY.trim()];
+  }
 
   try {
     const result = await executeWithKeyFailover(
@@ -265,7 +279,10 @@ export async function synthesizeDebateSpeech(
 
   const provider: AIProvider = profile?.provider || 'gemini';
   const voice = options?.voiceName || profile?.voiceName || (provider === 'openai' ? 'onyx' : 'Fenrir');
-  const ttsModel = options?.ttsModelId || profile?.ttsModelId || (provider === 'openai' ? 'tts-1' : 'gemini-3.8-flash-lite-tts');
+  let ttsModel = options?.ttsModelId || profile?.ttsModelId || (provider === 'openai' ? 'tts-1' : 'gemini-3.8-flash-lite-tts');
+  if (provider === 'gemini' && (!ttsModel.includes('3.8') || ttsModel === 'gemini-3.5-flash-tts' || ttsModel === 'gemini-3.1-flash-lite-tts')) {
+    ttsModel = 'gemini-3.8-flash-lite-tts';
+  }
   const speed = options?.voiceSpeed || profile?.voiceSpeed || 1.0;
   const speakerKey = profile ? profile.id : String(speakerProfileOrSide);
 
@@ -370,7 +387,7 @@ export async function generateDebateTurnContent(params: {
   } = params;
 
   const provider: AIProvider = speaker.provider || 'gemini';
-  const modelId =
+  let modelId =
     speaker.modelId ||
     (provider === 'openai'
       ? 'gpt-4o'
@@ -379,6 +396,10 @@ export async function generateDebateTurnContent(params: {
       : provider === 'openrouter'
       ? 'anthropic/claude-3.7-sonnet'
       : 'gemini-3.8-flash');
+
+  if (provider === 'gemini' && (!modelId || modelId === 'gemini-3.5-flash-lite' || modelId === 'gemini-3.6-flash' || modelId.startsWith('gemini-1.5') || modelId.startsWith('gemini-2.0'))) {
+    modelId = 'gemini-3.8-flash';
+  }
 
   const keys = db.resolveProfileApiKeys(speaker.id);
 
@@ -414,22 +435,16 @@ CORE PRINCIPLES:
       break;
   }
 
-  const previousContext =
-    previousTurns.length > 0
-      ? `Debate History (Chronological Turns):\n` +
-        previousTurns
-          .map((t, idx) => {
-            let block = `--- Turn #${idx + 1}: ${t.speaker} ---\nMain Thesis: "${t.claim}"\nSpeech Delivered: "${t.text}"`;
-            if (t.reasoning && t.reasoning.length > 0) {
-              block += `\nPremises:\n${t.reasoning.map(r => `  • ${r}`).join('\n')}`;
-            }
-            if (t.questionsForOpponent && t.questionsForOpponent.length > 0) {
-              block += `\nDirect Challenge Posed to You:\n${t.questionsForOpponent.map(q => `  • "${q}"`).join('\n')}`;
-            }
-            return block;
-          })
-          .join('\n\n')
-      : `No previous statements. You are delivering the opening statement.`;
+  // Compact single-turn rolling window: Keep only the immediate opponent's turn to dismantle
+  let previousContext = 'No previous statements. You are delivering the opening statement.';
+  if (previousTurns.length > 0) {
+    const lastTurn = previousTurns[previousTurns.length - 1];
+    previousContext = `IMMEDIATE REBUTTAL CONTEXT (Opponent's latest statement to dismantle):
+Opponent Speaker: ${lastTurn.speaker}
+Opponent Thesis: "${lastTurn.claim}"
+Opponent Key Statement: "${lastTurn.text.slice(0, 320)}"
+${lastTurn.questionsForOpponent && lastTurn.questionsForOpponent.length > 0 ? `Opponent Direct Challenge to You: "${lastTurn.questionsForOpponent[0]}"` : ''}`;
+  }
 
   const prompt = `${personaIdentity}
 
@@ -440,30 +455,29 @@ ${roundInstruction}
 
 ${previousContext}
 
-CRITICAL ORATORICAL INSTRUCTIONS FOR REALISTIC DEBATE:
-1. DIRECT ENGAGEMENT: Address ${opponent.name} by name. Respond to their specific premises, evidence, or questions.
-2. SPOKEN ELOQUENCE: "speech_text" MUST be a complete, beautifully paced monologue (130-180 words) written for spoken voice delivery.
-3. STRUCTURE: Include rigorous analytical reasoning points, a sharp direct rebuttal, and a piercing philosophical challenge for your opponent.
+CRITICAL ORATORICAL INSTRUCTIONS (TOKEN-OPTIMIZED):
+1. DIRECT ENGAGEMENT: Address ${opponent.name} by name. Directly address and dismantle their latest premise or inquiry.
+2. CONCISE SPOKEN MONOLOGUE: "speech_text" MUST be a crisp, articulate spoken argument (80-110 words) for natural voice synthesis. Keep it sharp and powerful without fluff.
+3. STRUCTURE: Provide 2 punchy reasoning premises, 1 direct rebuttal, and 1 sharp counter-inquiry.
 
 Return strictly valid JSON with this schema:
 {
   "main_claim": "A concise, powerful thesis statement (1-2 sentences)",
   "reasoning": [
-    "First supporting premise or deduction",
-    "Second supporting premise or empirical evidence",
-    "Third supporting premise or analytical inference"
+    "First supporting premise or empirical fact",
+    "Second supporting premise or logical deduction"
   ],
-  "response_to_opponent": "Direct, incisive rebuttal addressing ${opponent.name}'s previous points",
+  "response_to_opponent": "Direct, incisive rebuttal addressing ${opponent.name}'s argument",
   "questions_for_opponent": [
-    "A piercing, focused challenge for ${opponent.name}"
+    "A sharp, focused challenge for ${opponent.name}"
   ],
   "uncertainties": [
-    "An intellectually honest acknowledgment of where nuances or boundaries lie"
+    "An intellectually honest acknowledgment of where nuances lie"
   ],
   "sources": [
     { "title": "Authoritative paper, principle, or empirical reference", "url": "https://en.wikipedia.org" }
   ],
-  "speech_text": "A full, articulate spoken monologue (around 130-180 words) suitable for live audio debate speech synthesis, speaking directly to ${opponent.name} and the listeners."
+  "speech_text": "A punchy, articulate spoken monologue (80-110 words) speaking directly to ${opponent.name} and the listeners."
 }
 
 Do NOT wrap with markdown outside of the JSON. Return only the JSON object.`;

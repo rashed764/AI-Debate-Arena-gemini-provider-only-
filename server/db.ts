@@ -214,6 +214,49 @@ class ArenaDatabase {
       }
     });
 
+    // Sanitize & migrate invalid, non-existent or deprecated Gemini models
+    Object.values(this.data.profiles).forEach(p => {
+      if (p.provider === 'gemini' || !p.provider) {
+        if (
+          !p.ttsModelId ||
+          p.ttsModelId === 'gemini-3.5-flash-tts' ||
+          p.ttsModelId === 'gemini-3.1-flash-lite-tts' ||
+          !p.ttsModelId.includes('3.8')
+        ) {
+          p.ttsModelId = 'gemini-3.8-flash-lite-tts';
+        }
+        if (
+          !p.modelId ||
+          p.modelId === 'gemini-3.5-flash-lite' ||
+          p.modelId === 'gemini-3.6-flash' ||
+          p.modelId.startsWith('gemini-1.5') ||
+          p.modelId.startsWith('gemini-2.0')
+        ) {
+          p.modelId = 'gemini-3.8-flash';
+        }
+      }
+    });
+
+    // Also sanitize aiConfigs
+    if (this.data.aiConfigs) {
+      if (this.data.aiConfigs.atheist) {
+        if (!this.data.aiConfigs.atheist.modelId || this.data.aiConfigs.atheist.modelId === 'gemini-3.5-flash-lite') {
+          this.data.aiConfigs.atheist.modelId = 'gemini-3.8-flash';
+        }
+        if (!this.data.aiConfigs.atheist.ttsModelId || this.data.aiConfigs.atheist.ttsModelId === 'gemini-3.5-flash-tts' || !this.data.aiConfigs.atheist.ttsModelId.includes('3.8')) {
+          this.data.aiConfigs.atheist.ttsModelId = 'gemini-3.8-flash-lite-tts';
+        }
+      }
+      if (this.data.aiConfigs.believer) {
+        if (!this.data.aiConfigs.believer.modelId || this.data.aiConfigs.believer.modelId === 'gemini-3.5-flash-lite') {
+          this.data.aiConfigs.believer.modelId = 'gemini-3.8-flash';
+        }
+        if (!this.data.aiConfigs.believer.ttsModelId || this.data.aiConfigs.believer.ttsModelId === 'gemini-3.5-flash-tts' || !this.data.aiConfigs.believer.ttsModelId.includes('3.8')) {
+          this.data.aiConfigs.believer.ttsModelId = 'gemini-3.8-flash-lite-tts';
+        }
+      }
+    }
+
     if (!this.data.debates) this.data.debates = {};
     if (!this.data.votes) this.data.votes = {};
     if (!this.data.auditLogs) this.data.auditLogs = [];
@@ -222,7 +265,7 @@ class ArenaDatabase {
     if (Object.keys(this.data.debates).length === 0) {
       this.seedInitialDebate();
     } else {
-      // Migrate any existing debates to include debater1 and debater2 snapshots
+      // Migrate any existing debates to include debater1 and debater2 snapshots and valid models
       Object.values(this.data.debates).forEach(d => {
         if (!d.debater1) {
           d.debater1 = this.createProfileSnapshot(this.data.profiles['profile-atheist'] || DEFAULT_PROFILES['profile-atheist']);
@@ -230,6 +273,25 @@ class ArenaDatabase {
         if (!d.debater2) {
           d.debater2 = this.createProfileSnapshot(this.data.profiles['profile-believer'] || DEFAULT_PROFILES['profile-believer']);
         }
+
+        // Sanitize debate snapshot models
+        if (d.debater1) {
+          if (!d.debater1.ttsModelId || d.debater1.ttsModelId === 'gemini-3.5-flash-tts' || !d.debater1.ttsModelId.includes('3.8')) {
+            d.debater1.ttsModelId = 'gemini-3.8-flash-lite-tts';
+          }
+          if (!d.debater1.modelId || d.debater1.modelId === 'gemini-3.5-flash-lite' || d.debater1.modelId === 'gemini-3.6-flash') {
+            d.debater1.modelId = 'gemini-3.8-flash';
+          }
+        }
+        if (d.debater2) {
+          if (!d.debater2.ttsModelId || d.debater2.ttsModelId === 'gemini-3.5-flash-tts' || !d.debater2.ttsModelId.includes('3.8')) {
+            d.debater2.ttsModelId = 'gemini-3.8-flash-lite-tts';
+          }
+          if (!d.debater2.modelId || d.debater2.modelId === 'gemini-3.5-flash-lite' || d.debater2.modelId === 'gemini-3.6-flash') {
+            d.debater2.modelId = 'gemini-3.8-flash';
+          }
+        }
+
         if (!d.votes.debater1 && d.votes.atheist !== undefined) {
           d.votes.debater1 = d.votes.atheist;
         }
@@ -576,12 +638,10 @@ class ArenaDatabase {
       }
     }
 
-    // 3. Fallback to environment variables
-    if (keys.length === 0) {
-      const envKey = this.getEnvKeyForProfile(profile.id, profile.name, profile.provider);
-      if (envKey && envKey.trim().length > 0) {
-        keys.push(envKey.trim());
-      }
+    // 3. Fallback / backup failover to environment variables
+    const envKey = this.getEnvKeyForProfile(profile.id, profile.name, profile.provider);
+    if (envKey && envKey.trim().length > 0 && !keys.includes(envKey.trim())) {
+      keys.push(envKey.trim());
     }
 
     return keys;

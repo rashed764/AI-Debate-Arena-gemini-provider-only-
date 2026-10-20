@@ -73,8 +73,9 @@ export async function executeWithKeyFailover<T>(
       if (isRecoverable && i < validKeys.length - 1) {
         switchedKeysCount++;
         console.info(
-          `[KeyPoolFailover] Rate limit or quota error detected. Automatically failing over to backup key #${i + 2}...`
+          `[KeyPoolFailover] Rate limit or quota error detected on key #${i + 1}. Automatically failing over to backup key #${i + 2}...`
         );
+        await new Promise(r => setTimeout(r, 600));
         continue;
       }
 
@@ -104,7 +105,18 @@ export async function generateTextWithProvider(
       httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
     });
 
-    const isArgon = modelId.includes('argon') || modelId.includes('gemini-4');
+    // Ensure valid, supported Gemini text model
+    let effectiveModel = modelId || 'gemini-3.8-flash';
+    if (
+      effectiveModel === 'gemini-3.5-flash-lite' ||
+      effectiveModel === 'gemini-3.6-flash' ||
+      effectiveModel.startsWith('gemini-1.5') ||
+      effectiveModel.startsWith('gemini-2.0')
+    ) {
+      effectiveModel = 'gemini-3.8-flash';
+    }
+
+    const isArgon = effectiveModel.includes('argon') || effectiveModel.includes('gemini-4');
     const config: any = {
       systemInstruction: systemInstruction || undefined,
       temperature,
@@ -121,16 +133,16 @@ export async function generateTextWithProvider(
     }
 
     const response = await client.models.generateContent({
-      model: modelId,
+      model: effectiveModel,
       contents: userPrompt,
       config,
     });
 
     const text = response.text || '';
     if (!text.trim()) {
-      throw new Error(`Received empty text from Gemini model ${modelId}.`);
+      throw new Error(`Received empty text from Gemini model ${effectiveModel}.`);
     }
-    return { text: text.trim(), model: modelId };
+    return { text: text.trim(), model: effectiveModel };
   }
 
   // OpenAI, Groq, OpenRouter share standard OpenAI chat completions format
@@ -248,15 +260,29 @@ export async function synthesizeSpeechWithProvider(
     httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
   });
 
+  // Ensure valid, supported Gemini TTS model (gemini-3.8-flash-lite-tts or gemini-3.8-flash-tts)
+  let effectiveTtsModel = ttsModelId || 'gemini-3.8-flash-lite-tts';
+  if (
+    effectiveTtsModel === 'gemini-3.5-flash-tts' ||
+    effectiveTtsModel === 'gemini-3.1-flash-lite-tts' ||
+    !effectiveTtsModel.includes('3.8')
+  ) {
+    effectiveTtsModel = 'gemini-3.8-flash-lite-tts';
+  }
+
+  // Prebuilt Gemini voices: Puck, Charon, Kore, Fenrir, Zephyr
+  const allowedGeminiVoices = ['Fenrir', 'Kore', 'Puck', 'Charon', 'Zephyr', 'Aoede'];
+  const effectiveVoice = allowedGeminiVoices.includes(voiceName) ? voiceName : 'Fenrir';
+
   const response = await client.models.generateContent({
-    model: ttsModelId || 'gemini-3.8-flash-lite-tts',
+    model: effectiveTtsModel,
     contents: text,
     config: {
       responseModalities: ['AUDIO'],
       speechConfig: {
         voiceConfig: {
           prebuiltVoiceConfig: {
-            voiceName: voiceName || 'Fenrir',
+            voiceName: effectiveVoice,
           },
         },
       },
@@ -267,7 +293,9 @@ export async function synthesizeSpeechWithProvider(
   for (const part of parts) {
     if (part.inlineData && part.inlineData.mimeType?.startsWith('audio/')) {
       const pcmBuffer = Buffer.from(part.inlineData.data || '', 'base64');
-      const wavBuffer = convertPcmToWav(pcmBuffer, 24000, 1, 16);
+      // If already has RIFF header (Unary WAV format from Gemini 3.8 TTS default), use directly
+      const isAlreadyWav = pcmBuffer.length >= 4 && pcmBuffer.subarray(0, 4).toString('ascii') === 'RIFF';
+      const wavBuffer = isAlreadyWav ? pcmBuffer : convertPcmToWav(pcmBuffer, 24000, 1, 16);
       return {
         audioBuffer: wavBuffer,
         contentType: 'audio/wav',

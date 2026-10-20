@@ -20,18 +20,11 @@ export const PROVIDER_CATALOGS: Record<AIProvider, ProviderModelCatalog> = {
         isRecommended: true,
       },
       {
-        id: 'gemini-3.6-flash',
-        name: 'Gemini 3.6 Flash (High Performance)',
+        id: 'gemini-flash-latest',
+        name: 'Gemini Flash Latest',
         provider: 'gemini',
         type: 'text',
-        description: 'Reliable, balanced speed and reasoning across multi-turn debates',
-      },
-      {
-        id: 'gemini-3.5-flash-lite',
-        name: 'Gemini 3.5 Flash Lite (Lightweight & Cost Efficient)',
-        provider: 'gemini',
-        type: 'text',
-        description: 'Lightweight high-throughput model ideal for rapid exchanges',
+        description: 'Always points to the latest stable Gemini Flash version',
       },
       {
         id: 'gemini-3.1-flash-lite',
@@ -51,32 +44,18 @@ export const PROVIDER_CATALOGS: Record<AIProvider, ProviderModelCatalog> = {
     ttsModels: [
       {
         id: 'gemini-3.8-flash-lite-tts',
-        name: 'Gemini 3.8 Flash Lite TTS (Low Latency, Free Tier)',
+        name: 'Gemini 3.8 Flash Lite TTS (Recommended Low Latency, Free Tier)',
         provider: 'gemini',
         type: 'tts',
-        description: 'Fastest voice generation with crisp phonetics',
+        description: 'Fastest voice generation with crisp phonetics and cost efficiency',
         isRecommended: true,
       },
       {
         id: 'gemini-3.8-flash-tts',
-        name: 'Gemini 3.8 Flash TTS (High Fidelity Speech)',
+        name: 'Gemini 3.8 Flash TTS (High Fidelity Speech & Drama)',
         provider: 'gemini',
         type: 'tts',
         description: 'Rich, natural dynamic range and emotional depth',
-      },
-      {
-        id: 'gemini-3.5-flash-tts',
-        name: 'Gemini 3.5 Flash TTS (Classic Balanced)',
-        provider: 'gemini',
-        type: 'tts',
-        description: 'Stable speech generation with great clarity',
-      },
-      {
-        id: 'gemini-3.1-flash-lite-tts',
-        name: 'Gemini 3.1 Flash Lite TTS (High Throughput)',
-        provider: 'gemini',
-        type: 'tts',
-        description: 'Optimized for high-speed voice streaming',
       },
     ],
     voices: [

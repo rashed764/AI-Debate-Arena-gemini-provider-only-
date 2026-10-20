@@ -72,10 +72,56 @@ export default function App() {
   const waitingForMessageIdRef = useRef<string | null>(waitingForMessageId);
   waitingForMessageIdRef.current = waitingForMessageId;
 
-  // Audio Playback Engine
+  // Audio Playback Engine with On-Demand Voice Synthesis
+  const requestOnDemandAudio = async (turn: DebateTurn, autoContinue = true) => {
+    const debate = activeDebateRef.current;
+    if (!debate) return;
+    setWaitingForMessageId(turn.id);
+    waitingForMessageIdRef.current = turn.id;
+    setCurrentStatementTitle(`Synthesizing voice on-demand for ${turn.speakerName}...`);
+
+    try {
+      const res = await fetch(`/api/debates/${debate.id}/synthesize-audio/${turn.id}`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (data.audioUrl) {
+        const updatedTurn: DebateTurn = {
+          ...turn,
+          audioUrl: data.audioUrl,
+          audioStatus: 'ready',
+        };
+        // Update local state
+        setActiveDebate(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            messages: prev.messages.map(m => (m.id === turn.id ? updatedTurn : m)),
+          };
+        });
+        playTurnAudio(updatedTurn, autoContinue);
+      } else {
+        setCurrentStatementTitle(`Voice generation failed for ${turn.speakerName}.`);
+        setWaitingForMessageId(null);
+        waitingForMessageIdRef.current = null;
+      }
+    } catch (err) {
+      console.warn('On-demand audio synthesis failed:', err);
+      setCurrentStatementTitle(`Audio unavailable for ${turn.speakerName}.`);
+      setWaitingForMessageId(null);
+      waitingForMessageIdRef.current = null;
+    }
+  };
+
   const playTurnAudio = (turn: DebateTurn, enableAutoContinuation = true) => {
-    if (!turn.audioUrl || !audioElementRef.current) return;
     if (playbackModeRef.current === 'text_only') return;
+
+    if (!turn.audioUrl) {
+      // On-demand audio synthesis triggered only when user plays
+      requestOnDemandAudio(turn, enableAutoContinuation);
+      return;
+    }
+    if (!audioElementRef.current) return;
 
     setAutoPlayEnabled(enableAutoContinuation);
     autoPlayEnabledRef.current = enableAutoContinuation;
@@ -131,6 +177,9 @@ export default function App() {
       if (nextTurn.audioStatus === 'ready' && nextTurn.audioUrl) {
         // Continuous sequencing: immediately play next statement
         playTurnAudio(nextTurn, true);
+      } else if (nextTurn.audioStatus === 'none') {
+        // Synthesize next turn on-demand!
+        requestOnDemandAudio(nextTurn, true);
       } else if (nextTurn.audioStatus === 'generating') {
         // Next voice turn is in-progress: wait for SSE audio_ready
         setWaitingForMessageId(nextTurn.id);
@@ -429,6 +478,8 @@ export default function App() {
       const available = activeDebate?.messages.filter(m => m.audioStatus === 'ready' && m.audioUrl);
       if (available && available.length > 0) {
         playTurnAudio(available[0], true);
+      } else if (activeDebate?.messages && activeDebate.messages.length > 0) {
+        playTurnAudio(activeDebate.messages[0], true);
       }
     }
   };
@@ -459,12 +510,14 @@ export default function App() {
       const currentId = activePlayingMessageIdRef.current;
       const currentMsg = debate?.messages.find(m => m.id === currentId);
 
-      if (currentMsg && currentMsg.audioUrl) {
+      if (currentMsg) {
         playTurnAudio(currentMsg, true);
       } else {
         const readyMsg = debate?.messages.find(m => m.audioStatus === 'ready' && m.audioUrl);
         if (readyMsg) {
           playTurnAudio(readyMsg, true);
+        } else if (debate?.messages && debate.messages.length > 0) {
+          playTurnAudio(debate.messages[0], true);
         }
       }
     }
@@ -688,7 +741,7 @@ export default function App() {
           onChangeVolume={setVolume}
           onChangeSpeed={setSpeed}
           onReplayCurrent={handleReplayCurrent}
-          hasPlayableAudio={!!activeDebate?.messages.some(m => m.audioStatus === 'ready')}
+          hasPlayableAudio={!!activeDebate && activeDebate.messages.length > 0}
           autoplayBlocked={autoplayBlocked}
           onUnlockAudio={handleUnlockAudio}
         />

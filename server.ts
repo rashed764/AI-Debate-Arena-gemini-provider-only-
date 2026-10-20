@@ -432,43 +432,18 @@ app.get('/api/debates/:id/stream', (req: Request, res: Response) => {
   });
 });
 
-// Retry audio synthesis for a message
-app.post('/api/debates/:id/retry-audio/:messageId', async (req: Request, res: Response) => {
+// On-Demand and retry audio synthesis for a message
+app.post([
+  '/api/debates/:id/retry-audio/:messageId',
+  '/api/debates/:id/synthesize-audio/:messageId',
+  '/api/debates/:id/turns/:messageId/play-audio',
+], async (req: Request, res: Response) => {
   const { id, messageId } = req.params;
-  const debate = db.getDebate(id);
-  if (!debate) {
-    res.status(404).json({ error: 'Debate not found' });
-    return;
-  }
-  const msg = debate.messages.find(m => m.id === messageId);
-  if (!msg) {
-    res.status(404).json({ error: 'Message not found' });
-    return;
-  }
-
   try {
-    db.updateMessageAudio(id, messageId, { audioStatus: 'generating' });
-    const speaker = msg.speakerSide === 'debater1' ? debate.debater1 : debate.debater2;
-    const audioResult = await synthesizeDebateSpeech(speaker, msg.rawText);
-    db.updateMessageAudio(id, messageId, {
-      audioUrl: audioResult.audioUrl,
-      audioDuration: audioResult.durationSeconds,
-      audioStatus: 'ready',
-      audioCached: audioResult.cached,
-    });
-    orchestrator.broadcast(id, 'audio_ready', {
-      messageId,
-      audioUrl: audioResult.audioUrl,
-      duration: audioResult.durationSeconds,
-      cached: audioResult.cached,
-    });
-    res.json({ success: true, audioUrl: audioResult.audioUrl });
+    const audioResult = await orchestrator.synthesizeTurnAudio(id, messageId);
+    res.json({ success: true, audioUrl: audioResult.audioUrl, duration: audioResult.durationSeconds, cached: audioResult.cached });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    db.updateMessageAudio(id, messageId, {
-      audioStatus: 'failed',
-      audioError: errorMsg,
-    });
     res.status(500).json({ error: errorMsg });
   }
 });

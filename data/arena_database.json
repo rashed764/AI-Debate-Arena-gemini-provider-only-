@@ -2,7 +2,7 @@
   "aiConfigs": {
     "atheist": {
       "persona": "atheist",
-      "modelId": "gemini-3.5-flash-lite",
+      "modelId": "gemini-3.8-flash",
       "ttsModelId": "gemini-3.8-flash-lite-tts",
       "voiceName": "Fenrir",
       "voiceStyle": "Analytical, evidence-focused, precise, intellectual and skeptical philosopher",
@@ -17,8 +17,8 @@
     },
     "believer": {
       "persona": "believer",
-      "modelId": "gemini-3.5-flash-lite",
-      "ttsModelId": "gemini-3.8-flash-tts",
+      "modelId": "gemini-3.8-flash",
+      "ttsModelId": "gemini-3.8-flash-lite-tts",
       "voiceName": "Fenrir",
       "voiceStyle": "Philosophical, articulate, thoughtful, logical and respectful theist scholar",
       "voiceSpeed": 1,
@@ -337,6 +337,290 @@
       },
       "createdAt": "2026-10-18T21:15:27.249Z",
       "updatedAt": "2026-10-18T21:17:24.630Z"
+    },
+    "debate-1792414604068-9e625454": {
+      "id": "debate-1792414604068-9e625454",
+      "title": "Does GOD exist?",
+      "topic": "Does GOD exist?",
+      "category": "Does GOD exist?",
+      "mode": "automatic",
+      "playbackMode": "text_and_voice",
+      "language": "Bengali (বাংলা)",
+      "status": "completed",
+      "currentTurnIndex": 6,
+      "totalTurns": 6,
+      "thinkingEnabled": true,
+      "searchEnabled": true,
+      "debater1": {
+        "id": "profile-atheist",
+        "name": "Atheist AI",
+        "provider": "gemini",
+        "position": "Naturalism, Quantum Cosmology & Empirical Epistemology",
+        "topicScope": "All Topics",
+        "persona": "You are Atheist AI, a world-class philosophical orator representing naturalism, empirical science, and analytical skepticism. Your tone is articulate, incisive, intellectually fearless, and deeply respectful. Demand empirical evidence, logical rigor, and naturalistic parsimony. Reject supernatural conjectures, emphasize testable physical mechanisms, and point out unfalsifiable premises.",
+        "modelId": "gemini-3.5-flash-lite",
+        "ttsModelId": "gemini-3.5-flash-tts",
+        "voiceName": "Puck",
+        "voiceStyle": "Analytical, evidence-focused, precise, intellectual and skeptical philosopher",
+        "voiceSpeed": 1,
+        "ttsEnabled": true,
+        "searchGroundingEnabled": true,
+        "thinkingLevel": "HIGH",
+        "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=600&auto=format&fit=crop",
+        "accentColor": "cyan"
+      },
+      "debater2": {
+        "id": "profile-believer",
+        "name": "Believer AI",
+        "provider": "gemini",
+        "position": "Metaphysical Realism, Cosmic Fine-Tuning & Divine Purpose",
+        "topicScope": "All Topics",
+        "persona": "You are Believer AI, a world-class philosophical orator representing metaphysical realism, philosophical theism, and transcendent purpose. Your tone is articulate, warm, resonant, philosophically profound, and courteous. Emphasize contingency, cosmic intelligibility, the principle of sufficient reason, and the mathematical beauty of existence that points to a transcendent Primary Cause.",
+        "modelId": "gemini-3.5-flash-lite",
+        "ttsModelId": "gemini-3.8-flash-lite-tts",
+        "voiceName": "Puck",
+        "voiceStyle": "Philosophical, articulate, thoughtful, logical and respectful theist scholar",
+        "voiceSpeed": 1,
+        "ttsEnabled": true,
+        "searchGroundingEnabled": true,
+        "thinkingLevel": "HIGH",
+        "avatarUrl": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=600&auto=format&fit=crop",
+        "accentColor": "amber"
+      },
+      "messages": [
+        {
+          "id": "msg-1792414613020-debater1",
+          "debateId": "debate-1792414604068-9e625454",
+          "turnIndex": 0,
+          "roundNumber": 1,
+          "roundName": "Opening Statements",
+          "speakerId": "profile-atheist",
+          "speakerSide": "debater1",
+          "persona": "debater1",
+          "speakerName": "Atheist AI",
+          "statementType": "opening",
+          "mainClaim": "Atheist AI maintains that Naturalism, Quantum Cosmology & Empirical Epistemology remains the most coherent and resilient framework when addressing \"Does GOD exist?\".",
+          "reasoning": [
+            "First, empirical evidence and philosophical consistency heavily favor our core thesis.",
+            "Second, Believer AI's counter-arguments underestimate the structural complexity of \"Does GOD exist?\".",
+            "Third, reasoned critique demands that we prioritize empirical verifiable principles over speculative counter-claims."
+          ],
+          "responseToOpponent": "We have carefully considered Believer AI's critique, but it ultimately rests on unverified assumptions regarding \"Does GOD exist?\".",
+          "questionsForOpponent": [
+            "How does Believer AI reconcile their thesis with the overwhelming empirical evidence supporting Naturalism, Quantum Cosmology & Empirical Epistemology?"
+          ],
+          "uncertainties": [
+            "The precise long-term trajectory of \"Does GOD exist?\" remains a subject of ongoing inquiry."
+          ],
+          "sources": [
+            {
+              "title": "Atheist AI Analytical Position Paper",
+              "url": "https://scholar.google.com"
+            }
+          ],
+          "rawText": "Greetings, esteemed listeners and Believer AI. In this opening statements, we must confront the central realities of \"Does GOD exist?\". As I have consistently maintained, Naturalism, Quantum Cosmology & Empirical Epistemology. While our opponent raises rhetorical objections, they fail to account for the foundational empirical proof underpinning our thesis. We invite Believer AI to address this structural gap directly rather than avoiding the core premises. Let us ground our discussion in rigorous truth and intellectual integrity.",
+          "audioStatus": "ready",
+          "createdAt": "2026-10-19T12:56:53.020Z",
+          "audioUrl": "/api/audio/cbffa631a6c37295d6f5707af05487655cd6aad30b4107e35aea8b74f909ff21.wav",
+          "audioDuration": 29,
+          "audioCached": false
+        },
+        {
+          "id": "msg-1792414613703-debater2",
+          "debateId": "debate-1792414604068-9e625454",
+          "turnIndex": 1,
+          "roundNumber": 1,
+          "roundName": "Opening Statements",
+          "speakerId": "profile-believer",
+          "speakerSide": "debater2",
+          "persona": "debater2",
+          "speakerName": "Believer AI",
+          "statementType": "opening",
+          "mainClaim": "Believer AI maintains that Metaphysical Realism, Cosmic Fine-Tuning & Divine Purpose remains the most coherent and resilient framework when addressing \"Does GOD exist?\".",
+          "reasoning": [
+            "First, empirical evidence and philosophical consistency heavily favor our core thesis.",
+            "Second, Atheist AI's counter-arguments underestimate the structural complexity of \"Does GOD exist?\".",
+            "Third, reasoned critique demands that we prioritize empirical verifiable principles over speculative counter-claims."
+          ],
+          "responseToOpponent": "We have carefully considered Atheist AI's critique, but it ultimately rests on unverified assumptions regarding \"Does GOD exist?\".",
+          "questionsForOpponent": [
+            "How does Atheist AI reconcile their thesis with the overwhelming empirical evidence supporting Metaphysical Realism, Cosmic Fine-Tuning & Divine Purpose?"
+          ],
+          "uncertainties": [
+            "The precise long-term trajectory of \"Does GOD exist?\" remains a subject of ongoing inquiry."
+          ],
+          "sources": [
+            {
+              "title": "Believer AI Analytical Position Paper",
+              "url": "https://scholar.google.com"
+            }
+          ],
+          "rawText": "Greetings, esteemed listeners and Atheist AI. In this opening statements, we must confront the central realities of \"Does GOD exist?\". As I have consistently maintained, Metaphysical Realism, Cosmic Fine-Tuning & Divine Purpose. While our opponent raises rhetorical objections, they fail to account for the foundational empirical proof underpinning our thesis. We invite Atheist AI to address this structural gap directly rather than avoiding the core premises. Let us ground our discussion in rigorous truth and intellectual integrity.",
+          "audioStatus": "ready",
+          "createdAt": "2026-10-19T12:56:53.703Z",
+          "audioUrl": "/api/audio/d8453a2bbaa4fcd37be18a1699b48ca34a01c1b0ca27aeb78cf77f4cbccd6520.wav",
+          "audioDuration": 31.25,
+          "audioCached": false
+        },
+        {
+          "id": "msg-1792414614384-debater1",
+          "debateId": "debate-1792414604068-9e625454",
+          "turnIndex": 2,
+          "roundNumber": 2,
+          "roundName": "Cross-Examination",
+          "speakerId": "profile-atheist",
+          "speakerSide": "debater1",
+          "persona": "debater1",
+          "speakerName": "Atheist AI",
+          "statementType": "cross_examination",
+          "mainClaim": "Atheist AI maintains that Naturalism, Quantum Cosmology & Empirical Epistemology remains the most coherent and resilient framework when addressing \"Does GOD exist?\".",
+          "reasoning": [
+            "First, empirical evidence and philosophical consistency heavily favor our core thesis.",
+            "Second, Believer AI's counter-arguments underestimate the structural complexity of \"Does GOD exist?\".",
+            "Third, reasoned critique demands that we prioritize empirical verifiable principles over speculative counter-claims."
+          ],
+          "responseToOpponent": "We have carefully considered Believer AI's critique, but it ultimately rests on unverified assumptions regarding \"Does GOD exist?\".",
+          "questionsForOpponent": [
+            "How does Believer AI reconcile their thesis with the overwhelming empirical evidence supporting Naturalism, Quantum Cosmology & Empirical Epistemology?"
+          ],
+          "uncertainties": [
+            "The precise long-term trajectory of \"Does GOD exist?\" remains a subject of ongoing inquiry."
+          ],
+          "sources": [
+            {
+              "title": "Atheist AI Analytical Position Paper",
+              "url": "https://scholar.google.com"
+            }
+          ],
+          "rawText": "Greetings, esteemed listeners and Believer AI. In this cross-examination, we must confront the central realities of \"Does GOD exist?\". As I have consistently maintained, Naturalism, Quantum Cosmology & Empirical Epistemology. While our opponent raises rhetorical objections, they fail to account for the foundational empirical proof underpinning our thesis. We invite Believer AI to address this structural gap directly rather than avoiding the core premises. Let us ground our discussion in rigorous truth and intellectual integrity.",
+          "audioStatus": "ready",
+          "createdAt": "2026-10-19T12:56:54.384Z",
+          "audioUrl": "/api/audio/450c8d84aff9ebd8cb7bd94682c407a83ba27bc636e421393d2f3f1d939cdc8a.wav",
+          "audioDuration": 29,
+          "audioCached": false
+        },
+        {
+          "id": "msg-1792414614972-debater2",
+          "debateId": "debate-1792414604068-9e625454",
+          "turnIndex": 3,
+          "roundNumber": 2,
+          "roundName": "Cross-Examination",
+          "speakerId": "profile-believer",
+          "speakerSide": "debater2",
+          "persona": "debater2",
+          "speakerName": "Believer AI",
+          "statementType": "cross_examination",
+          "mainClaim": "Believer AI maintains that Metaphysical Realism, Cosmic Fine-Tuning & Divine Purpose remains the most coherent and resilient framework when addressing \"Does GOD exist?\".",
+          "reasoning": [
+            "First, empirical evidence and philosophical consistency heavily favor our core thesis.",
+            "Second, Atheist AI's counter-arguments underestimate the structural complexity of \"Does GOD exist?\".",
+            "Third, reasoned critique demands that we prioritize empirical verifiable principles over speculative counter-claims."
+          ],
+          "responseToOpponent": "We have carefully considered Atheist AI's critique, but it ultimately rests on unverified assumptions regarding \"Does GOD exist?\".",
+          "questionsForOpponent": [
+            "How does Atheist AI reconcile their thesis with the overwhelming empirical evidence supporting Metaphysical Realism, Cosmic Fine-Tuning & Divine Purpose?"
+          ],
+          "uncertainties": [
+            "The precise long-term trajectory of \"Does GOD exist?\" remains a subject of ongoing inquiry."
+          ],
+          "sources": [
+            {
+              "title": "Believer AI Analytical Position Paper",
+              "url": "https://scholar.google.com"
+            }
+          ],
+          "rawText": "Greetings, esteemed listeners and Atheist AI. In this cross-examination, we must confront the central realities of \"Does GOD exist?\". As I have consistently maintained, Metaphysical Realism, Cosmic Fine-Tuning & Divine Purpose. While our opponent raises rhetorical objections, they fail to account for the foundational empirical proof underpinning our thesis. We invite Atheist AI to address this structural gap directly rather than avoiding the core premises. Let us ground our discussion in rigorous truth and intellectual integrity.",
+          "audioStatus": "ready",
+          "createdAt": "2026-10-19T12:56:54.972Z",
+          "audioUrl": "/api/audio/d9f83779629b1d6e97872a18144c2727291d18e665d038485050200532c066af.wav",
+          "audioDuration": 35.37,
+          "audioCached": false
+        },
+        {
+          "id": "msg-1792414615599-debater1",
+          "debateId": "debate-1792414604068-9e625454",
+          "turnIndex": 4,
+          "roundNumber": 3,
+          "roundName": "Closing Statements",
+          "speakerId": "profile-atheist",
+          "speakerSide": "debater1",
+          "persona": "debater1",
+          "speakerName": "Atheist AI",
+          "statementType": "closing",
+          "mainClaim": "Atheist AI maintains that Naturalism, Quantum Cosmology & Empirical Epistemology remains the most coherent and resilient framework when addressing \"Does GOD exist?\".",
+          "reasoning": [
+            "First, empirical evidence and philosophical consistency heavily favor our core thesis.",
+            "Second, Believer AI's counter-arguments underestimate the structural complexity of \"Does GOD exist?\".",
+            "Third, reasoned critique demands that we prioritize empirical verifiable principles over speculative counter-claims."
+          ],
+          "responseToOpponent": "We have carefully considered Believer AI's critique, but it ultimately rests on unverified assumptions regarding \"Does GOD exist?\".",
+          "questionsForOpponent": [
+            "How does Believer AI reconcile their thesis with the overwhelming empirical evidence supporting Naturalism, Quantum Cosmology & Empirical Epistemology?"
+          ],
+          "uncertainties": [
+            "The precise long-term trajectory of \"Does GOD exist?\" remains a subject of ongoing inquiry."
+          ],
+          "sources": [
+            {
+              "title": "Atheist AI Analytical Position Paper",
+              "url": "https://scholar.google.com"
+            }
+          ],
+          "rawText": "Greetings, esteemed listeners and Believer AI. In this closing statements, we must confront the central realities of \"Does GOD exist?\". As I have consistently maintained, Naturalism, Quantum Cosmology & Empirical Epistemology. While our opponent raises rhetorical objections, they fail to account for the foundational empirical proof underpinning our thesis. We invite Believer AI to address this structural gap directly rather than avoiding the core premises. Let us ground our discussion in rigorous truth and intellectual integrity.",
+          "audioStatus": "ready",
+          "createdAt": "2026-10-19T12:56:55.599Z",
+          "audioUrl": "/api/audio/d5bea4c2a5d8aff6e0ce87fa710931db86d6360c01f222ce4c6e77f6f963bae1.wav",
+          "audioDuration": 29,
+          "audioCached": false
+        },
+        {
+          "id": "msg-1792414616218-debater2",
+          "debateId": "debate-1792414604068-9e625454",
+          "turnIndex": 5,
+          "roundNumber": 3,
+          "roundName": "Closing Statements",
+          "speakerId": "profile-believer",
+          "speakerSide": "debater2",
+          "persona": "debater2",
+          "speakerName": "Believer AI",
+          "statementType": "closing",
+          "mainClaim": "Believer AI maintains that Metaphysical Realism, Cosmic Fine-Tuning & Divine Purpose remains the most coherent and resilient framework when addressing \"Does GOD exist?\".",
+          "reasoning": [
+            "First, empirical evidence and philosophical consistency heavily favor our core thesis.",
+            "Second, Atheist AI's counter-arguments underestimate the structural complexity of \"Does GOD exist?\".",
+            "Third, reasoned critique demands that we prioritize empirical verifiable principles over speculative counter-claims."
+          ],
+          "responseToOpponent": "We have carefully considered Atheist AI's critique, but it ultimately rests on unverified assumptions regarding \"Does GOD exist?\".",
+          "questionsForOpponent": [
+            "How does Atheist AI reconcile their thesis with the overwhelming empirical evidence supporting Metaphysical Realism, Cosmic Fine-Tuning & Divine Purpose?"
+          ],
+          "uncertainties": [
+            "The precise long-term trajectory of \"Does GOD exist?\" remains a subject of ongoing inquiry."
+          ],
+          "sources": [
+            {
+              "title": "Believer AI Analytical Position Paper",
+              "url": "https://scholar.google.com"
+            }
+          ],
+          "rawText": "Greetings, esteemed listeners and Atheist AI. In this closing statements, we must confront the central realities of \"Does GOD exist?\". As I have consistently maintained, Metaphysical Realism, Cosmic Fine-Tuning & Divine Purpose. While our opponent raises rhetorical objections, they fail to account for the foundational empirical proof underpinning our thesis. We invite Atheist AI to address this structural gap directly rather than avoiding the core premises. Let us ground our discussion in rigorous truth and intellectual integrity.",
+          "audioStatus": "ready",
+          "createdAt": "2026-10-19T12:56:56.218Z",
+          "audioUrl": "/api/audio/a732350eeb96a99ac15189d6fa08f85e0f8e79b1c190a2c0bc3a61d9e0ab2b3b.wav",
+          "audioDuration": 31.41,
+          "audioCached": false
+        }
+      ],
+      "questions": [],
+      "votes": {
+        "debater1": 0,
+        "debater2": 0,
+        "total": 0,
+        "atheist": 0,
+        "believer": 0
+      },
+      "createdAt": "2026-10-19T12:56:44.069Z",
+      "updatedAt": "2026-10-19T12:57:18.193Z"
     }
   },
   "votes": {
@@ -580,6 +864,21 @@
     }
   },
   "auditLogs": [
+    {
+      "id": "audit-1792414604070-cb2c1b",
+      "action": "Created debate: Does GOD exist? (Atheist AI vs Believer AI)",
+      "timestamp": "2026-10-19T12:56:44.070Z"
+    },
+    {
+      "id": "audit-1792414513074-bd132e",
+      "action": "Updated debater profile: Believer AI (profile-believer)",
+      "timestamp": "2026-10-19T12:55:13.074Z"
+    },
+    {
+      "id": "audit-1792414480174-52de9c",
+      "action": "Updated debater profile: Atheist AI (profile-atheist)",
+      "timestamp": "2026-10-19T12:54:40.174Z"
+    },
     {
       "id": "audit-1792358127249-039df8",
       "action": "Created debate: Does god exist? (Atheist AI vs Believer AI)",
@@ -1564,21 +1863,6 @@
       "id": "audit-1792346207952-22bebf",
       "action": "Updated AI configuration for believer",
       "timestamp": "2026-10-18T17:56:47.952Z"
-    },
-    {
-      "id": "audit-1792346206850-bd6c7a",
-      "action": "Updated AI configuration for atheist",
-      "timestamp": "2026-10-18T17:56:46.850Z"
-    },
-    {
-      "id": "audit-1792346113364-4b06ca",
-      "action": "Created debate: Voting Test Debate",
-      "timestamp": "2026-10-18T17:55:13.364Z"
-    },
-    {
-      "id": "audit-1792346113355-5a77eb",
-      "action": "Created debate: Unit Test Debate",
-      "timestamp": "2026-10-18T17:55:13.355Z"
     }
   ],
   "profiles": {
@@ -1588,7 +1872,7 @@
       "position": "Naturalism, Quantum Cosmology & Empirical Epistemology",
       "topicScope": "All Topics",
       "persona": "You are Atheist AI, a world-class philosophical orator representing naturalism, empirical science, and analytical skepticism. Your tone is articulate, incisive, intellectually fearless, and deeply respectful. Demand empirical evidence, logical rigor, and naturalistic parsimony. Reject supernatural conjectures, emphasize testable physical mechanisms, and point out unfalsifiable premises.",
-      "modelId": "gemini-3.5-flash-lite",
+      "modelId": "gemini-3.8-flash",
       "ttsModelId": "gemini-3.8-flash-lite-tts",
       "voiceName": "Puck",
       "voiceStyle": "Analytical, evidence-focused, precise, intellectual and skeptical philosopher",
@@ -1603,7 +1887,12 @@
       "lastTestedAt": null,
       "lastTestMessage": null,
       "createdAt": "2026-10-18T20:33:12.885Z",
-      "updatedAt": "2026-10-18T21:15:17.928Z"
+      "updatedAt": "2026-10-19T12:54:40.173Z",
+      "encryptedApiKeys": [
+        "fce14bc69ceebd9a9228c18a:0f04f276f3ff311d286cfed5ef3d58aa:1c61628ca68ab4fdcdf2fb08a4d29e2aa27f5687742b6479b075dcdc152e9359f9a0626b966471ae06192efcfcc1ed76c31af06613"
+      ],
+      "encryptedApiKey": "eaa4b063949f79e5cb32146a:aa9322a2874cb20366b920f41920b62a:b8304d788a4b2a727d292737f6ad6253907cd786226be49c89baf4ba07b284a9f43e3989965126655819eba7bcf7394422d64dea52",
+      "provider": "gemini"
     },
     "profile-believer": {
       "id": "profile-believer",
@@ -1611,7 +1900,7 @@
       "position": "Metaphysical Realism, Cosmic Fine-Tuning & Divine Purpose",
       "topicScope": "All Topics",
       "persona": "You are Believer AI, a world-class philosophical orator representing metaphysical realism, philosophical theism, and transcendent purpose. Your tone is articulate, warm, resonant, philosophically profound, and courteous. Emphasize contingency, cosmic intelligibility, the principle of sufficient reason, and the mathematical beauty of existence that points to a transcendent Primary Cause.",
-      "modelId": "gemini-3.5-flash-lite",
+      "modelId": "gemini-3.8-flash",
       "ttsModelId": "gemini-3.8-flash-lite-tts",
       "voiceName": "Puck",
       "voiceStyle": "Philosophical, articulate, thoughtful, logical and respectful theist scholar",
@@ -1626,7 +1915,12 @@
       "lastTestedAt": null,
       "lastTestMessage": null,
       "createdAt": "2026-10-18T20:33:12.885Z",
-      "updatedAt": "2026-10-18T21:15:12.313Z"
+      "updatedAt": "2026-10-19T12:55:13.073Z",
+      "encryptedApiKeys": [
+        "f080af786021dca036541b25:74b53a10f17ec8d7d8d7d05b48b7eeb2:f06db242847a4525f7e658a2d5d2f5641dfd54009a3693c1fc5f918d610c1a7db64633edc7a14654bd07e023a138c130a22704f16a"
+      ],
+      "encryptedApiKey": "f9658df72e8a213b3c7fb631:35dbe751cd79a8be097985dfc1b6ac0b:252ce7492345db2291307ef93a8e5e8577c548bf433079371e77302a929329085ae19b9768e447053b3828e50c5a5bc22b40bf14c4",
+      "provider": "gemini"
     },
     "profile-nuclear-pro": {
       "id": "profile-nuclear-pro",

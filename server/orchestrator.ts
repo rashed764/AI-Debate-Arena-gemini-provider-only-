@@ -207,8 +207,8 @@ class DebateOrchestrator {
       }
 
       const messageId = `msg-${Date.now()}-${plan.speakerSide}`;
-      const needsAudio = debate.playbackMode === 'text_and_voice' || debate.playbackMode === 'voice_only';
-
+      // On-demand audio optimization: Voice synthesis is decoupled from background turn generation.
+      // Audio is synthesized on-demand when the user clicks Play or listens live, cutting background TTS calls to 0.
       const newMessage: DebateTurn = {
         id: messageId,
         debateId,
@@ -227,53 +227,12 @@ class DebateOrchestrator {
         uncertainties: turnContent.uncertainties,
         sources: turnContent.sources,
         rawText: turnContent.rawSpeechSummary,
-        audioStatus: needsAudio ? 'generating' : 'none',
+        audioStatus: 'none',
         createdAt: new Date().toISOString(),
       };
 
       db.addMessage(debateId, newMessage);
       this.broadcast(debateId, 'message_created', newMessage);
-
-      // 2. Synthesize audio if voice mode is enabled
-      if (needsAudio) {
-        try {
-          const audioResult = await synthesizeDebateSpeech(plan.speaker, newMessage.rawText);
-          if (this.cancelledDebates.has(debateId) || !db.getDebate(debateId)) {
-            return newMessage;
-          }
-
-          newMessage.audioUrl = audioResult.audioUrl;
-          newMessage.audioDuration = audioResult.durationSeconds;
-          newMessage.audioStatus = 'ready';
-          newMessage.audioCached = audioResult.cached;
-
-          db.updateMessageAudio(debateId, messageId, {
-            audioUrl: audioResult.audioUrl,
-            audioDuration: audioResult.durationSeconds,
-            audioStatus: 'ready',
-            audioCached: audioResult.cached,
-          });
-
-          this.broadcast(debateId, 'audio_ready', {
-            messageId,
-            turnIndex: newMessage.turnIndex,
-            audioUrl: audioResult.audioUrl,
-            duration: audioResult.durationSeconds,
-            cached: audioResult.cached,
-          });
-        } catch (audioErr: unknown) {
-          const msg = audioErr instanceof Error ? audioErr.message : String(audioErr);
-          console.error(`Audio synthesis error for ${plan.speakerName}:`, msg);
-          db.updateMessageAudio(debateId, messageId, {
-            audioStatus: 'failed',
-            audioError: msg,
-          });
-          this.broadcast(debateId, 'audio_failed', {
-            messageId,
-            error: msg,
-          });
-        }
-      }
 
       // Check if this was the last turn
       const updatedDebate = db.getDebate(debateId);
@@ -407,72 +366,10 @@ class DebateOrchestrator {
       const finalizedDebate = db.getDebate(debateId);
       if (!finalizedDebate) return;
 
-      if (finalizedDebate.playbackMode === 'text_only') {
-        db.updateDebate(debateId, { status: 'completed' });
-        this.broadcast(debateId, 'debate_completed', {
-          status: 'completed',
-          totalMessages: finalizedDebate.messages.length,
-        });
-        return;
-      }
-
-      // Phase B: Generate Audio for all entries post-debate
-      db.updateDebate(debateId, { status: 'generating_audio' });
-      this.broadcast(debateId, 'audio_generation_start', { total: finalizedDebate.messages.length });
-
-      let completedCount = 0;
-      for (const msg of finalizedDebate.messages) {
-        if (this.cancelledDebates.has(debateId) || !db.getDebate(debateId)) break;
-
-        try {
-          db.updateMessageAudio(debateId, msg.id, { audioStatus: 'generating' });
-          this.broadcast(debateId, 'audio_generating', { messageId: msg.id });
-
-          const speaker = msg.speakerSide === 'debater1' ? finalizedDebate.debater1 : finalizedDebate.debater2;
-          const audioResult = await synthesizeDebateSpeech(speaker, msg.rawText);
-
-          if (this.cancelledDebates.has(debateId) || !db.getDebate(debateId)) break;
-
-          db.updateMessageAudio(debateId, msg.id, {
-            audioUrl: audioResult.audioUrl,
-            audioDuration: audioResult.durationSeconds,
-            audioStatus: 'ready',
-            audioCached: audioResult.cached,
-          });
-
-          completedCount++;
-          this.broadcast(debateId, 'audio_generation_progress', {
-            completedCount,
-            totalCount: finalizedDebate.messages.length,
-            messageId: msg.id,
-          });
-
-          this.broadcast(debateId, 'audio_ready', {
-            messageId: msg.id,
-            turnIndex: msg.turnIndex,
-            audioUrl: audioResult.audioUrl,
-            duration: audioResult.durationSeconds,
-            cached: audioResult.cached,
-          });
-        } catch (audioErr: unknown) {
-          const errMsg = audioErr instanceof Error ? audioErr.message : String(audioErr);
-          console.error(`Audio synthesis error for message ${msg.id}:`, errMsg);
-          db.updateMessageAudio(debateId, msg.id, {
-            audioStatus: 'failed',
-            audioError: errMsg,
-          });
-          this.broadcast(debateId, 'audio_failed', {
-            messageId: msg.id,
-            error: errMsg,
-          });
-        }
-      }
-
-      if (this.cancelledDebates.has(debateId) || !db.getDebate(debateId)) return;
-
-      db.updateDebate(debateId, { status: 'audio_ready' });
-      this.broadcast(debateId, 'audio_ready_all', { status: 'audio_ready' });
-
+      // On-Demand Voice Optimization:
+      // Automatic transcript generation finishes cleanly without batch-synthesizing all turn audios.
+      // Audio is synthesized on-demand only when a user presses Play or listens continuously,
+      // slashing background API calls by 50%+ and preserving key quotas.
       db.updateDebate(debateId, { status: 'completed' });
       this.broadcast(debateId, 'debate_completed', {
         status: 'completed',
@@ -516,6 +413,52 @@ class DebateOrchestrator {
     this.activeJobs.delete(debateId);
     db.updateDebate(debateId, { status: 'completed' });
     this.broadcast(debateId, 'debate_stopped', { status: 'completed' });
+  }
+
+  /**
+   * Synthesize audio on-demand for a single turn.
+   */
+  public async synthesizeTurnAudio(debateId: string, messageId: string) {
+    const debate = db.getDebate(debateId);
+    if (!debate) throw new Error('Debate not found');
+    const msg = debate.messages.find(m => m.id === messageId);
+    if (!msg) throw new Error('Message not found');
+
+    db.updateMessageAudio(debateId, messageId, { audioStatus: 'generating' });
+    this.broadcast(debateId, 'audio_generating', { messageId });
+
+    try {
+      const speaker = msg.speakerSide === 'debater1' ? debate.debater1 : debate.debater2;
+      const audioResult = await synthesizeDebateSpeech(speaker, msg.rawText);
+
+      db.updateMessageAudio(debateId, messageId, {
+        audioUrl: audioResult.audioUrl,
+        audioDuration: audioResult.durationSeconds,
+        audioStatus: 'ready',
+        audioCached: audioResult.cached,
+      });
+
+      this.broadcast(debateId, 'audio_ready', {
+        messageId,
+        turnIndex: msg.turnIndex,
+        audioUrl: audioResult.audioUrl,
+        duration: audioResult.durationSeconds,
+        cached: audioResult.cached,
+      });
+
+      return audioResult;
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      db.updateMessageAudio(debateId, messageId, {
+        audioStatus: 'failed',
+        audioError: errMsg,
+      });
+      this.broadcast(debateId, 'audio_failed', {
+        messageId,
+        error: errMsg,
+      });
+      throw err;
+    }
   }
 }
 

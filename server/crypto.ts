@@ -92,10 +92,43 @@ export function maskApiKey(key?: string): string {
 }
 
 /**
+ * Formats structured or JSON error payloads into clean, user-friendly messages.
+ */
+export function formatFriendlyErrorMessage(rawMessage: string): string {
+  if (!rawMessage) return 'An unexpected error occurred.';
+  
+  // Try to parse embedded JSON error payloads e.g. {"error":{"code":429,"message":"..."}}
+  const jsonMatch = rawMessage.match(/\{[\s\S]*"error"[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed?.error?.message) {
+        const msg = String(parsed.error.message).trim();
+        if (parsed.error.code === 429 || parsed.error.status === 'RESOURCE_EXHAUSTED' || msg.includes('quota') || msg.includes('rate limit')) {
+          return `Gemini API quota or rate limit exceeded (429 RESOURCE_EXHAUSTED). Please verify your API key usage or billing plan on Google AI Studio.`;
+        }
+        if (parsed.error.code === 404 || parsed.error.status === 'NOT_FOUND') {
+          return `Model not found or unsupported for this operation (404): ${msg}`;
+        }
+        return msg;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (rawMessage.includes('RESOURCE_EXHAUSTED') || rawMessage.includes('exceeded your current quota') || rawMessage.includes('429')) {
+    return 'Gemini API quota or rate limit exceeded (429 RESOURCE_EXHAUSTED). Automatic key failover or autonomous debate synthesis will engage.';
+  }
+
+  return rawMessage;
+}
+
+/**
  * Strips any sensitive API key strings or tokens from an error message.
  */
 export function sanitizeErrorMessage(message: string, knownKeys: string[] = []): string {
-  let clean = message || 'An unknown error occurred';
+  let clean = formatFriendlyErrorMessage(message || 'An unknown error occurred');
   for (const k of knownKeys) {
     if (k && k.length >= 6) {
       clean = clean.split(k).join('[PROTECTED_API_KEY]');
